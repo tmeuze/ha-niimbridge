@@ -224,10 +224,14 @@ def render_item_label(
 
     if place:
         fitted, font = _one_line(
-            draw, place, regular, box_w, max_size=int(place_h / 1.15)
+            draw, place, regular, box_w, max_size=int(place_h / 1.35)
         )
         draw.text((text_x, y), fitted, font=font, fill=0)
         y += place_h
+        if name_lines:
+            # Thin rule between the area and the name.
+            rule_y = y - max(2, place_h // 8)
+            draw.line((text_x, rule_y, text_x + box_w - 1, rule_y), fill=0, width=1)
 
     if name_lines:
         size = getattr(name_font, "size", 12)

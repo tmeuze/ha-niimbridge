@@ -73,7 +73,7 @@ If you'd rather print HomeBox's own rendered image, use `--header=Content-Type:i
 The standard layout is a QR code on the left (URL, else asset ID, else name) with three single-line rows on the right, with no "Location:" style keys:
 
 1. asset ID, in a small monospace font, white on black and right-aligned
-2. area name (HomeBox's parent location, or `area`/`location` in JSON)
+2. area name (HomeBox's parent location, or `area`/`location` in JSON), followed by a thin horizontal rule
 3. item name, with the area name removed (so "Kitchen Lamp" in "Kitchen" prints as "Lamp")
 
 The asset ID and area are single lines that shrink to fit. The item name wraps onto extra lines when it is long, shrinking only as far as needed, and is cut off with an ellipsis only at the minimum size. HomeBox sends the item's immediate parent location, which is shown as the area, so include the floor in your area names (for example `L3 Kitchen`). If you send HomeBox's own PNG instead of JSON, the QR size comes from HomeBox. Set HomeBox's label width and height to the same aspect ratio as your label so the image isn't shrunk to fit.
