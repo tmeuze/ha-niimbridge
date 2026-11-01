@@ -71,3 +71,18 @@ def test_long_name_stays_one_line_and_fits():
     spec = renderer.LabelSpec(320, 96)
     png = renderer.render_item_label(spec, "word " * 60, "000-001", "F | A", "u")
     assert _size(png) == (320, 96)
+
+
+def test_short_floor():
+    assert renderer.short_floor("F3") == "L3"
+    assert renderer.short_floor("Floor 2") == "L2"
+    assert renderer.short_floor("Level 1") == "L1"
+    assert renderer.short_floor("Ground") == "Ground"
+
+
+def test_asset_id_is_inverted_and_right_aligned():
+    spec = renderer.LabelSpec(320, 96)
+    png = renderer.render_item_label(spec, "Lamp", "000-042", "F3 | Kitchen", "u")
+    img = Image.open(BytesIO(png)).convert("L")
+    # Top-right corner of the text box is the black asset-ID block.
+    assert img.getpixel((spec.width - 5, 10)) == 0

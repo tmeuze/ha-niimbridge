@@ -55,6 +55,16 @@ def split_location(location: str) -> tuple[str, str]:
     return "", location.strip()
 
 
+_FLOOR_RE = re.compile(r"^(?:f|fl|floor|l|lvl|level)\.?\s*(-?[0-9]+)$", re.IGNORECASE)
+
+
+def short_floor(floor: str) -> str:
+    """Abbreviate "F3" / "Floor 3" / "Level 3" to "L3"; leave other names alone."""
+    if m := _FLOOR_RE.match(floor.strip()):
+        return f"L{m.group(1)}"
+    return floor.strip()
+
+
 def strip_location_from_name(name: str, *places: str) -> str:
     """Remove floor/area words from an item name, e.g. "Kitchen Lamp" -> "Lamp"."""
     result = name
@@ -152,7 +162,7 @@ def render_item_label(
     def regular(size: int) -> Any:
         return _font(spec, size)
 
-    place = " | ".join(part for part in (floor, area) if part)
+    place = " | ".join(part for part in (short_floor(floor), area) if part)
     display_name = strip_location_from_name(name, floor, area) if name else ""
 
     # (text, font factory, share of the box height, fixed size or None=fit)
@@ -181,6 +191,20 @@ def render_item_label(
             max_size = spec.font_size
         elif make_font is _mono and name_cap:
             max_size = min(max_size, name_cap)
+        if make_font is _mono:
+            # Asset ID: white on black, right-aligned to the edge of the text box.
+            inset = max(2, row_h // 8)
+            fitted, font = _one_line(
+                draw, text, make_font, box_w - 2 * inset, max_size=max_size
+            )
+            left, top, right, bottom = draw.textbbox((0, 0), fitted, font=font)
+            w, h = right - left, bottom - top
+            x1 = text_x + box_w
+            x0 = x1 - w - 2 * inset
+            draw.rectangle((x0, y, x1 - 1, y + h + 2 * inset - 1), fill=0)
+            draw.text((x0 + inset - left, y + inset - top), fitted, font=font, fill=1)
+            y += max(row_h, h + 2 * inset)
+            continue
         fitted, font = _one_line(draw, text, make_font, box_w, max_size=max_size)
         draw.text((text_x, y), fitted, font=font, fill=0)
         y += row_h
