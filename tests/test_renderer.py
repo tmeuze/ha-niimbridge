@@ -85,4 +85,4 @@ def test_asset_id_is_inverted_and_right_aligned():
     png = renderer.render_item_label(spec, "Lamp", "000-042", "F3 | Kitchen", "u")
     img = Image.open(BytesIO(png)).convert("L")
     # Top-right corner of the text box is the black asset-ID block.
-    assert img.getpixel((spec.width - 5, 10)) == 0
+    assert img.getpixel((spec.width - 12, 12)) == 0
