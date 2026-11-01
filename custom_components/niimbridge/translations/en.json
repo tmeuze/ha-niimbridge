@@ -59,15 +59,15 @@
         },
         "name": {
           "name": "Name",
-          "description": "Item name."
+          "description": "Item name; floor and area words are removed from it. Optional if asset_id is set."
         },
         "asset_id": {
           "name": "Asset ID",
-          "description": "Shown under the name."
+          "description": "Shown in a small monospace font above the floor and area."
         },
         "location": {
           "name": "Location",
-          "description": "Shown under the name."
+          "description": "Alternative to floor/area: a 'Floor | Area' or 'Floor / Area' string is split automatically."
         },
         "url": {
           "name": "URL",
@@ -80,6 +80,14 @@
         "preview_only": {
           "name": "Preview only",
           "description": "Render the preview image without printing."
+        },
+        "floor": {
+          "name": "Floor",
+          "description": "Shown with the area as 'floor | area'."
+        },
+        "area": {
+          "name": "Area",
+          "description": "Shown with the floor as 'floor | area'."
         }
       }
     }

@@ -40,3 +40,34 @@ def test_fit_image_scales_to_label():
     src = renderer.render_item_label(renderer.LabelSpec(640, 200), "Src")
     spec = renderer.LabelSpec(400, 240)
     assert _size(renderer.fit_image_to_label(spec, src)) == (400, 240)
+
+
+def test_strip_location_from_name():
+    assert renderer.strip_location_from_name("Kitchen Lamp", "Floor 1", "Kitchen") == "Lamp"
+    assert renderer.strip_location_from_name("Kitchen", "Kitchen") == "Kitchen"
+
+
+def test_split_location():
+    assert renderer.split_location("Floor 1 | Kitchen") == ("Floor 1", "Kitchen")
+    assert renderer.split_location("Kitchen") == ("", "Kitchen")
+
+
+def test_parse_homebox_asset_label():
+    data = renderer.parse_homebox_text(
+        "000-042", "\nKitchen Lamp\nLocation: Floor 1 | Kitchen", "https://hb/a/000-042"
+    )
+    assert data["asset_id"] == "000-042"
+    assert data["name"] == "Kitchen Lamp"
+    assert data["location"] == "Floor 1 | Kitchen"
+
+
+def test_parse_homebox_item_label():
+    data = renderer.parse_homebox_text("Drill", "\nLocation: Shed", "https://hb/item/abc")
+    assert data["name"] == "Drill" and data["asset_id"] == ""
+    assert data["location"] == "Shed"
+
+
+def test_long_name_stays_one_line_and_fits():
+    spec = renderer.LabelSpec(320, 96)
+    png = renderer.render_item_label(spec, "word " * 60, "000-001", "F | A", "u")
+    assert _size(png) == (320, 96)

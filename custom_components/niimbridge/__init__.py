@@ -17,8 +17,10 @@ SERVICE_PRINT_LABEL = "print_label"
 PRINT_LABEL_SCHEMA = vol.Schema(
     {
         vol.Optional("config_entry_id"): cv.string,
-        vol.Required("name"): cv.string,
+        vol.Optional("name", default=""): cv.string,
         vol.Optional("asset_id", default=""): cv.string,
+        vol.Optional("floor", default=""): cv.string,
+        vol.Optional("area", default=""): cv.string,
         vol.Optional("location", default=""): cv.string,
         vol.Optional("url", default=""): cv.string,
         vol.Optional("copies"): vol.All(vol.Coerce(int), vol.Range(min=1, max=50)),
