@@ -219,7 +219,6 @@ class NiimBridge:
             str(data.get("asset_id", "")),
             str(data.get("location", "")),
             str(data.get("url", "")),
-            str(data.get("floor", "")),
             str(data.get("area", "")),
         )
         await self._async_send(label, preview_only=preview_only, copies=data.get("copies"))

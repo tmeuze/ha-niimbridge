@@ -4,9 +4,9 @@
 
 ### Changed
 
-- New standard label layout: asset ID in a small monospace font, `floor | area`, then the item name with floor/area words removed. Rows never wrap; text shrinks to fit. No "Location:" style keys.
+- New standard label layout: asset ID in a small monospace font (white on black, right-aligned), the area name, then the item name with the area name removed. Rows never wrap; text shrinks to fit. No "Location:" style keys.
 - The webhook accepts HomeBox label text (`text/plain` with `X-Title` and `X-URL` headers) so NiimBridge draws the label itself. The PNG input still works.
-- JSON and `niimbridge.print_label` accept `floor` and `area`; `name` is optional when `asset_id` is set.
+- JSON and `niimbridge.print_label` accept `area` (alias `location`); `name` is optional when `asset_id` is set.
 - Bundles DejaVu Sans Mono (see `fonts/LICENSE_DEJAVU.txt`).
 
 ## [0.1.0] - 2026-10-06

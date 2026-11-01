@@ -53,7 +53,7 @@ HomeBox's label text (asset ID or name, URL, and its `Location:` line) is posted
 If you'd rather print HomeBox's own rendered image, use `--header=Content-Type:image/png --post-file={{.FileName}}` instead of the text options. It is scaled and centred to your label size but its layout is HomeBox's. The webhook also accepts a raw `image/png` body, or JSON for the standard layout:
 
 ```json
-{"name": "Anker USB-C Charger", "asset_id": "000-042", "floor": "Floor 1", "area": "Kitchen", "url": "https://homebox.example/item/abc", "copies": 1}
+{"name": "Anker USB-C Charger", "asset_id": "000-042", "area": "L1 Kitchen", "url": "https://homebox.example/item/abc", "copies": 1}
 ```
 
 **MQTT (optional).** The regular HomeBox image also ships `mosquitto_pub`, so you can use `HBOX_LABEL_MAKER_PRINT_COMMAND=mosquitto_pub -h <broker> -u <user> -P <password> -t homebox/labels -f {{.FileName}}` with the PNG topic set to `homebox/labels`. Set a PNG topic and/or a JSON topic in the options. PNG topics take the same image HomeBox would send; JSON topics take the same JSON as above.
@@ -72,11 +72,11 @@ If you'd rather print HomeBox's own rendered image, use `--header=Content-Type:i
 
 The standard layout is a QR code on the left (URL, else asset ID, else name) with three single-line rows on the right, with no "Location:" style keys:
 
-1. asset ID, in a small monospace font
-2. `floor | area`
-3. item name, with the floor and area words removed (so "Kitchen Lamp" in "Kitchen" prints as "Lamp")
+1. asset ID, in a small monospace font, white on black and right-aligned
+2. area name (HomeBox's parent location, or `area`/`location` in JSON)
+3. item name, with the area name removed (so "Kitchen Lamp" in "Kitchen" prints as "Lamp")
 
-Rows never wrap. Text shrinks to fit the row, and only at the minimum size is it cut off with an ellipsis. HomeBox only sends the item's immediate parent location, so that name is shown as the area, unless it is written as `Floor | Area` or `Floor / Area`, in which case it is split. Send `floor` and `area` in JSON (or the service) to set them exactly. If you send HomeBox's own PNG instead of JSON, the QR size comes from HomeBox. Set HomeBox's label width and height to the same aspect ratio as your label so the image isn't shrunk to fit.
+Rows never wrap. Text shrinks to fit the row, and only at the minimum size is it cut off with an ellipsis. HomeBox sends the item's immediate parent location, which is shown as the area, so include the floor in your area names (for example `L3 Kitchen`). If you send HomeBox's own PNG instead of JSON, the QR size comes from HomeBox. Set HomeBox's label width and height to the same aspect ratio as your label so the image isn't shrunk to fit.
 
 The **Label preview** image entity shows the last rendered label.
 

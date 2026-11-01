@@ -43,22 +43,17 @@ def test_fit_image_scales_to_label():
 
 
 def test_strip_location_from_name():
-    assert renderer.strip_location_from_name("Kitchen Lamp", "Floor 1", "Kitchen") == "Lamp"
+    assert renderer.strip_location_from_name("L1 Kitchen Lamp", "L1 Kitchen") == "Lamp"
     assert renderer.strip_location_from_name("Kitchen", "Kitchen") == "Kitchen"
-
-
-def test_split_location():
-    assert renderer.split_location("Floor 1 | Kitchen") == ("Floor 1", "Kitchen")
-    assert renderer.split_location("Kitchen") == ("", "Kitchen")
 
 
 def test_parse_homebox_asset_label():
     data = renderer.parse_homebox_text(
-        "000-042", "\nKitchen Lamp\nLocation: Floor 1 | Kitchen", "https://hb/a/000-042"
+        "000-042", "\nKitchen Lamp\nLocation: L1 Kitchen", "https://hb/a/000-042"
     )
     assert data["asset_id"] == "000-042"
     assert data["name"] == "Kitchen Lamp"
-    assert data["location"] == "Floor 1 | Kitchen"
+    assert data["location"] == "L1 Kitchen"
 
 
 def test_parse_homebox_item_label():
@@ -69,20 +64,13 @@ def test_parse_homebox_item_label():
 
 def test_long_name_stays_one_line_and_fits():
     spec = renderer.LabelSpec(320, 96)
-    png = renderer.render_item_label(spec, "word " * 60, "000-001", "F | A", "u")
+    png = renderer.render_item_label(spec, "word " * 60, "000-001", "L1 A", "u")
     assert _size(png) == (320, 96)
-
-
-def test_short_floor():
-    assert renderer.short_floor("F3") == "L3"
-    assert renderer.short_floor("Floor 2") == "L2"
-    assert renderer.short_floor("Level 1") == "L1"
-    assert renderer.short_floor("Ground") == "Ground"
 
 
 def test_asset_id_is_inverted_and_right_aligned():
     spec = renderer.LabelSpec(320, 96)
-    png = renderer.render_item_label(spec, "Lamp", "000-042", "F3 | Kitchen", "u")
+    png = renderer.render_item_label(spec, "Lamp", "000-042", "L3 Kitchen", "u")
     img = Image.open(BytesIO(png)).convert("L")
     # Top-right corner of the text box is the black asset-ID block.
     assert img.getpixel((spec.width - 20, 12)) == 0

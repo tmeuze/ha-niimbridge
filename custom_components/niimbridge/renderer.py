@@ -43,30 +43,10 @@ def _qr_image(data: str, size: int) -> Image.Image:
 
 
 MONO_FONT = str(Path(__file__).parent / "fonts" / "DejaVuSansMono.ttf")
-_SEPARATORS = (" | ", " / ", " > ", ">", "/", "|")
-
-
-def split_location(location: str) -> tuple[str, str]:
-    """Split a "Floor | Area" style location into (floor, area)."""
-    for sep in _SEPARATORS:
-        if sep in location:
-            floor, _, area = location.partition(sep)
-            return floor.strip(), area.strip()
-    return "", location.strip()
-
-
-_FLOOR_RE = re.compile(r"^(?:f|fl|floor|l|lvl|level)\.?\s*(-?[0-9]+)$", re.IGNORECASE)
-
-
-def short_floor(floor: str) -> str:
-    """Abbreviate "F3" / "Floor 3" / "Level 3" to "L3"; leave other names alone."""
-    if m := _FLOOR_RE.match(floor.strip()):
-        return f"L{m.group(1)}"
-    return floor.strip()
 
 
 def strip_location_from_name(name: str, *places: str) -> str:
-    """Remove floor/area words from an item name, e.g. "Kitchen Lamp" -> "Lamp"."""
+    """Remove area words from an item name, e.g. "Kitchen Lamp" -> "Lamp"."""
     result = name
     for place in sorted((p for p in places if p), key=len, reverse=True):
         result = re.sub(re.escape(place), "", result, flags=re.IGNORECASE)
@@ -136,15 +116,13 @@ def render_item_label(
     asset_id: str = "",
     location: str = "",
     url: str = "",
-    floor: str = "",
     area: str = "",
 ) -> bytes:
-    """Standard layout: QR on the left; asset ID (mono), floor | area, then name.
+    """Standard layout: QR on the left; asset ID (mono), area, then name.
 
     Every text row is a single line that shrinks to fit rather than wrapping.
     """
-    if location and not (floor or area):
-        floor, area = split_location(location)
+    area = area or location
     img = Image.new("1", (spec.width, spec.height), 1)
     draw = ImageDraw.Draw(img)
     pad = max(4, spec.height // 12)
@@ -162,8 +140,8 @@ def render_item_label(
     def regular(size: int) -> Any:
         return _font(spec, size)
 
-    place = " | ".join(part for part in (short_floor(floor), area) if part)
-    display_name = strip_location_from_name(name, floor, area) if name else ""
+    place = area
+    display_name = strip_location_from_name(name, area) if name else ""
 
     # (text, font factory, share of the box height, fixed size or None=fit)
     rows = []

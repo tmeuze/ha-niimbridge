@@ -12,10 +12,6 @@ print_label:
       example: "000-042"
       selector:
         text:
-    floor:
-      example: "Floor 1"
-      selector:
-        text:
     area:
       example: "Kitchen"
       selector:
