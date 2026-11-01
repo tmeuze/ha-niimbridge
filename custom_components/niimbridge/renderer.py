@@ -110,6 +110,51 @@ def _one_line(
     return text.rstrip() + "…", font
 
 
+def _wrap(draw: ImageDraw.ImageDraw, text: str, font: Any, max_width: int) -> list[str]:
+    lines: list[str] = []
+    current = ""
+    for word in text.split():
+        trial = f"{current} {word}".strip()
+        if not current or draw.textlength(trial, font=font) <= max_width:
+            current = trial
+        else:
+            lines.append(current)
+            current = word
+    if current:
+        lines.append(current)
+    return lines
+
+
+def _wrapped_fit(
+    draw: ImageDraw.ImageDraw,
+    text: str,
+    make_font: Any,
+    box_w: int,
+    box_h: int,
+    max_size: int,
+    min_size: int = 8,
+) -> tuple[list[str], Any]:
+    """Largest font whose word-wrapped text fits the box; ellipsis as a last resort."""
+    font = make_font(min_size)
+    lines = [text]
+    for size in range(max(max_size, min_size), min_size - 1, -1):
+        font = make_font(size)
+        lines = _wrap(draw, text, font, box_w)
+        widest = max((draw.textlength(line, font=font) for line in lines), default=0)
+        if widest <= box_w and len(lines) * int(size * 1.15) <= box_h:
+            return lines, font
+    # Even the minimum size does not fit: keep the lines that fit, ellipsize the last.
+    line_h = int(min_size * 1.15)
+    keep = max(1, box_h // line_h)
+    lines = _wrap(draw, text, font, box_w)[:keep]
+    last = lines[-1]
+    while len(last) > 1 and draw.textlength(last + "…", font=font) > box_w:
+        last = last[:-1]
+    if keep < len(_wrap(draw, text, font, box_w)) or draw.textlength(last, font=font) > box_w:
+        lines[-1] = last.rstrip() + "…"
+    return lines, font
+
+
 def render_item_label(
     spec: LabelSpec,
     name: str,
@@ -120,7 +165,8 @@ def render_item_label(
 ) -> bytes:
     """Standard layout: QR on the left; asset ID (mono), area, then name.
 
-    Every text row is a single line that shrinks to fit rather than wrapping.
+    The asset ID and area are single lines that shrink to fit. The name may wrap
+    onto several lines, shrinking only as far as needed to fit the label.
     """
     area = area or location
     img = Image.new("1", (spec.width, spec.height), 1)
@@ -143,49 +189,51 @@ def render_item_label(
     place = area
     display_name = strip_location_from_name(name, area) if name else ""
 
-    # (text, font factory, share of the box height, fixed size or None=fit)
-    rows = []
-    if asset_id:
-        rows.append((asset_id, _mono, 0.22))
-    if place:
-        rows.append((place, regular, 0.24))
-    if display_name:
-        rows.append((display_name, regular, 0.54))
-    total = sum(share for _, _, share in rows) or 1.0
+    # Asset ID and area take fixed shares of the height; the name gets the rest
+    # and may wrap onto several lines.
+    asset_h = int(box_h * 0.22) if asset_id else 0
+    place_h = int(box_h * 0.24) if place else 0
+    name_h = box_h - asset_h - place_h
 
-    # Fit the name first so the asset ID can be kept no larger than it.
-    name_cap: int | None = None
+    name_lines: list[str] = []
+    name_font: Any = None
     if display_name:
-        name_h = int(box_h * 0.54 / total)
         limit = spec.font_size if spec.font_size > 0 else int(name_h / 1.15)
-        _, name_font = _one_line(draw, display_name, regular, box_w, max_size=limit)
-        name_cap = getattr(name_font, "size", None)
+        name_lines, name_font = _wrapped_fit(
+            draw, display_name, regular, box_w, name_h, max_size=limit
+        )
 
     y = pad
-    for text, make_font, share in rows:
-        row_h = int(box_h * share / total)
-        max_size = int(row_h / 1.15)
-        if text == display_name and spec.font_size > 0:
-            max_size = spec.font_size
-        elif make_font is _mono and name_cap:
-            max_size = min(max_size, name_cap)
-        if make_font is _mono:
-            # Asset ID: white on black, right-aligned to the edge of the text box.
-            inset = max(2, row_h // 8)
-            fitted, font = _one_line(
-                draw, text, make_font, box_w - 2 * inset, max_size=max_size
-            )
-            left, top, right, bottom = draw.textbbox((0, 0), fitted, font=font)
-            w, h = right - left, bottom - top
-            x1 = text_x + box_w
-            x0 = x1 - w - 2 * inset
-            draw.rectangle((x0, y, x1 - 1, y + h + 2 * inset - 1), fill=0)
-            draw.text((x0 + inset - left, y + inset - top), fitted, font=font, fill=1)
-            y += max(row_h, h + 2 * inset)
-            continue
-        fitted, font = _one_line(draw, text, make_font, box_w, max_size=max_size)
+    if asset_id:
+        # White on black, right-aligned to the edge of the text box, and never
+        # larger than the name.
+        max_size = int(asset_h / 1.15)
+        if name_font is not None:
+            max_size = min(max_size, getattr(name_font, "size", max_size))
+        inset = max(2, asset_h // 8)
+        fitted, font = _one_line(
+            draw, asset_id, _mono, box_w - 2 * inset, max_size=max_size
+        )
+        left, top, right, bottom = draw.textbbox((0, 0), fitted, font=font)
+        w, h = right - left, bottom - top
+        x1 = text_x + box_w
+        x0 = x1 - w - 2 * inset
+        draw.rectangle((x0, y, x1 - 1, y + h + 2 * inset - 1), fill=0)
+        draw.text((x0 + inset - left, y + inset - top), fitted, font=font, fill=1)
+        y += max(asset_h, h + 2 * inset)
+
+    if place:
+        fitted, font = _one_line(
+            draw, place, regular, box_w, max_size=int(place_h / 1.15)
+        )
         draw.text((text_x, y), fitted, font=font, fill=0)
-        y += row_h
+        y += place_h
+
+    if name_lines:
+        size = getattr(name_font, "size", 12)
+        for line in name_lines:
+            draw.text((text_x, y), line, font=name_font, fill=0)
+            y += int(size * 1.15)
 
     return _to_png(img)
 

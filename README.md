@@ -76,7 +76,7 @@ The standard layout is a QR code on the left (URL, else asset ID, else name) wit
 2. area name (HomeBox's parent location, or `area`/`location` in JSON)
 3. item name, with the area name removed (so "Kitchen Lamp" in "Kitchen" prints as "Lamp")
 
-Rows never wrap. Text shrinks to fit the row, and only at the minimum size is it cut off with an ellipsis. HomeBox sends the item's immediate parent location, which is shown as the area, so include the floor in your area names (for example `L3 Kitchen`). If you send HomeBox's own PNG instead of JSON, the QR size comes from HomeBox. Set HomeBox's label width and height to the same aspect ratio as your label so the image isn't shrunk to fit.
+The asset ID and area are single lines that shrink to fit. The item name wraps onto extra lines when it is long, shrinking only as far as needed, and is cut off with an ellipsis only at the minimum size. HomeBox sends the item's immediate parent location, which is shown as the area, so include the floor in your area names (for example `L3 Kitchen`). If you send HomeBox's own PNG instead of JSON, the QR size comes from HomeBox. Set HomeBox's label width and height to the same aspect ratio as your label so the image isn't shrunk to fit.
 
 The **Label preview** image entity shows the last rendered label.
 

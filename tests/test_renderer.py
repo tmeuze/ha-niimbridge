@@ -74,3 +74,14 @@ def test_asset_id_is_inverted_and_right_aligned():
     img = Image.open(BytesIO(png)).convert("L")
     # Top-right corner of the text box is the black asset-ID block.
     assert img.getpixel((spec.width - 20, 12)) == 0
+
+
+def test_long_name_wraps_to_multiple_lines():
+    from PIL import ImageDraw
+    spec = renderer.LabelSpec(320, 96)
+    draw = ImageDraw.Draw(Image.new("1", (10, 10)))
+    lines, font = renderer._wrapped_fit(
+        draw, "Under-Cabinet Light Strip Controller", lambda s: renderer._font(spec, s), 220, 55, 40
+    )
+    assert len(lines) >= 2
+    assert all(draw.textlength(line, font=font) <= 220 for line in lines)
