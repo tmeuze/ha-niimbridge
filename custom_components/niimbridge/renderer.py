@@ -227,10 +227,12 @@ def render_item_label(
             draw, place, regular, box_w, max_size=int(place_h / 1.35)
         )
         draw.text((text_x, y), fitted, font=font, fill=0)
+        place_bottom = y + draw.textbbox((0, 0), fitted, font=font)[3]
         y += place_h
         if name_lines:
-            # Thin rule between the area and the name.
-            rule_y = y - max(2, place_h // 8)
+            # Thin rule centred between the area text and the top of the name.
+            name_top = y + draw.textbbox((0, 0), name_lines[0], font=name_font)[1]
+            rule_y = (place_bottom + name_top) // 2
             draw.line((text_x, rule_y, text_x + box_w - 1, rule_y), fill=0, width=1)
 
     if name_lines:
