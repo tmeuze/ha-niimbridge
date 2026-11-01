@@ -43,7 +43,7 @@ from .const import (
     MAX_UPLOAD_BYTES,
     SIGNAL_LABEL_UPDATED,
 )
-from .renderer import LabelSpec, fit_image_to_label, render_item_label
+from .renderer import LabelSpec, fit_image_to_label, parse_homebox_text, render_item_label
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -158,10 +158,22 @@ class NiimBridge:
                 self._queue(self.async_print_png(png))
             elif ctype.startswith("image/") or ctype == "application/octet-stream":
                 self._queue(self.async_print_png(await request.read()))
+            elif ctype == "text/plain":
+                # HomeBox template fields: X-Title / X-URL headers, description body.
+                data = parse_homebox_text(
+                    request.headers.get("X-Title", ""),
+                    await request.text(),
+                    request.headers.get("X-URL", ""),
+                )
+                if not data.get("name") and not data.get("asset_id"):
+                    raise ValueError("text label needs an X-Title header")
+                self._queue(self.async_print_item(data))
             elif ctype == "application/json":
                 data = await request.json()
-                if not isinstance(data, dict) or not data.get("name"):
-                    raise ValueError("JSON label needs at least a 'name'")
+                if not isinstance(data, dict) or not (
+                    data.get("name") or data.get("asset_id")
+                ):
+                    raise ValueError("JSON label needs at least a 'name' or 'asset_id'")
                 self._queue(self.async_print_item(data))
             else:
                 return web.Response(status=415, text="Unsupported content type")
@@ -197,8 +209,8 @@ class NiimBridge:
     async def async_print_item(
         self, data: dict[str, Any], *, preview_only: bool = False
     ) -> None:
-        if not isinstance(data, dict) or not data.get("name"):
-            raise ValueError("JSON label needs at least a 'name'")
+        if not isinstance(data, dict) or not (data.get("name") or data.get("asset_id")):
+            raise ValueError("JSON label needs at least a 'name' or 'asset_id'")
         spec = self.spec
         label = await self.hass.async_add_executor_job(
             render_item_label,
@@ -207,6 +219,7 @@ class NiimBridge:
             str(data.get("asset_id", "")),
             str(data.get("location", "")),
             str(data.get("url", "")),
+            str(data.get("area", "")),
         )
         await self._async_send(label, preview_only=preview_only, copies=data.get("copies"))
 

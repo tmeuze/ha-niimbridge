@@ -59,15 +59,15 @@
         },
         "name": {
           "name": "Name",
-          "description": "Item name."
+          "description": "Item name; the area name is removed from it. Optional if asset_id is set."
         },
         "asset_id": {
           "name": "Asset ID",
-          "description": "Shown under the name."
+          "description": "Shown in a small monospace font, white on black, at the top right."
         },
         "location": {
           "name": "Location",
-          "description": "Shown under the name."
+          "description": "Same as area (the area wins if both are set)."
         },
         "url": {
           "name": "URL",
@@ -80,6 +80,10 @@
         "preview_only": {
           "name": "Preview only",
           "description": "Render the preview image without printing."
+        },
+        "area": {
+          "name": "Area",
+          "description": "Area name shown under the asset ID."
         }
       }
     }

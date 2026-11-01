@@ -28,7 +28,7 @@ You don't register a webhook yourself. NiimBridge creates one with a random, sec
 
    ```yaml
    environment:
-     - HBOX_LABEL_MAKER_PRINT_COMMAND=wget -q -O /dev/null --tries=1 --timeout=10 --header=Content-Type:image/png --post-file={{.FileName}} http://homeassistant.local:8123/api/webhook/<random-id>
+     - HBOX_LABEL_MAKER_PRINT_COMMAND=wget -q -O /dev/null --tries=1 --timeout=10 --header=Content-Type:text/plain --header=X-Title:{{.TitleText}} --header=X-URL:{{.URL}} --post-data={{.DescriptionText}} http://homeassistant.local:8123/api/webhook/<random-id>
    ```
 
    Your label size in HomeBox (`HBOX_LABEL_MAKER_WIDTH` / `HEIGHT`) can stay as is; NiimBridge rescales to the label size you picked.
@@ -45,13 +45,15 @@ Notes:
 **Webhook (primary).** In HomeBox set:
 
 ```
-HBOX_LABEL_MAKER_PRINT_COMMAND=wget -q -O /dev/null --tries=1 --timeout=10 --header=Content-Type:image/png --post-file={{.FileName}} http://<ha>/api/webhook/<id>
+HBOX_LABEL_MAKER_PRINT_COMMAND=wget -q -O /dev/null --tries=1 --timeout=10 --header=Content-Type:text/plain --header=X-Title:{{.TitleText}} --header=X-URL:{{.URL}} --post-data={{.DescriptionText}} http://<ha>/api/webhook/<id>
 ```
 
-The label PNG HomeBox generates is posted as `image/png`, scaled and centred to your label size and printed. The webhook also accepts a raw `image/png` body, or JSON for the standard layout:
+HomeBox's label text (asset ID or name, URL, and its `Location:` line) is posted as `text/plain` and NiimBridge draws the label itself, so the design below applies and the label always matches your label size.
+
+If you'd rather print HomeBox's own rendered image, use `--header=Content-Type:image/png --post-file={{.FileName}}` instead of the text options. It is scaled and centred to your label size but its layout is HomeBox's. The webhook also accepts a raw `image/png` body, or JSON for the standard layout:
 
 ```json
-{"name": "Anker USB-C Charger", "asset_id": "000-042", "location": "Office", "url": "https://homebox.example/item/abc", "copies": 1}
+{"name": "Anker USB-C Charger", "asset_id": "000-042", "area": "L1 Kitchen", "url": "https://homebox.example/item/abc", "copies": 1}
 ```
 
 **MQTT (optional).** The regular HomeBox image also ships `mosquitto_pub`, so you can use `HBOX_LABEL_MAKER_PRINT_COMMAND=mosquitto_pub -h <broker> -u <user> -P <password> -t homebox/labels -f {{.FileName}}` with the PNG topic set to `homebox/labels`. Set a PNG topic and/or a JSON topic in the options. PNG topics take the same image HomeBox would send; JSON topics take the same JSON as above.
@@ -68,7 +70,13 @@ The label PNG HomeBox generates is posted as `image/png`, scaled and centred to 
 | QR code size | Percent of label height for the standard layout (30–100, default 90) |
 | Font, font size | Optional font file (looked up in `/config/www/fonts`); size 0 auto-fits |
 
-The standard layout is a QR code on the left (URL, else asset ID, else name) with the item name, asset ID and location on the right. If you send HomeBox's own PNG instead of JSON, the QR size comes from HomeBox. Set HomeBox's label width and height to the same aspect ratio as your label so the image isn't shrunk to fit.
+The standard layout is a QR code on the left (URL, else asset ID, else name) with three single-line rows on the right, with no "Location:" style keys:
+
+1. asset ID, in a small monospace font, white on black and right-aligned
+2. area name (HomeBox's parent location, or `area`/`location` in JSON), followed by a thin horizontal rule
+3. item name, with the area name removed (so "Kitchen Lamp" in "Kitchen" prints as "Lamp")
+
+The asset ID and area are single lines that shrink to fit. The item name wraps onto extra lines when it is long, shrinking only as far as needed, and is cut off with an ellipsis only at the minimum size. HomeBox sends the item's immediate parent location, which is shown as the area, so include the floor in your area names (for example `L3 Kitchen`). If you send HomeBox's own PNG instead of JSON, the QR size comes from HomeBox. Set HomeBox's label width and height to the same aspect ratio as your label so the image isn't shrunk to fit.
 
 The **Label preview** image entity shows the last rendered label.
 

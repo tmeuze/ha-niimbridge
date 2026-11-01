@@ -5,12 +5,15 @@ print_label:
         config_entry:
           integration: niimbridge
     name:
-      required: true
       example: "Anker USB-C Charger"
       selector:
         text:
     asset_id:
       example: "000-042"
+      selector:
+        text:
+    area:
+      example: "Kitchen"
       selector:
         text:
     location:
