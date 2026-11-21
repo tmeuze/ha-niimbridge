@@ -285,7 +285,10 @@ class NiimBridge:
         """Print a label from HomeBox's print-command fields."""
         data = parse_homebox_text(title, body, url)
         if found := await self._lookup_homebox_entity(url):
+            _LOGGER.debug("HomeBox lookup for %s: %s", url, found)
             data.update({k: v for k, v in found.items() if v})
+        else:
+            _LOGGER.debug("No HomeBox lookup result for %s; using request fields only", url)
         if copies:
             data["copies"] = copies
         await self.async_print_item(data)
