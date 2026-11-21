@@ -84,6 +84,10 @@
         "area": {
           "name": "Area",
           "description": "Area name shown under the asset ID."
+        },
+        "floor": {
+          "name": "Floor",
+          "description": "Shown inverted before the area, as 'floor | area'. If empty, a leading floor code in the area (such as 'L1 Kitchen') is split off automatically."
         }
       }
     }

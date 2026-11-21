@@ -107,9 +107,12 @@ def _webhook_placeholders(hass: Any, webhook_id: str) -> dict[str, str]:
     url = webhook.async_generate_url(hass, webhook_id)
     return {
         "webhook_url": url,
-        "command": "HBOX_LABEL_MAKER_PRINT_COMMAND=wget -q -O /dev/null --tries=1 --timeout=10 "
-        "--header=Content-Type:text/plain --header=X-Title:{{.TitleText}} "
-        "--header=X-URL:{{.URL}} --post-data={{.DescriptionText}} " + url,
+        "command": (
+            "HBOX_LABEL_MAKER_PRINT_COMMAND=wget -q -O /dev/null --tries=1 --timeout=10 "
+            "--header=Content-Type:text/plain --header=X-Title:{{.TitleText}} "
+            "--header=X-URL:{{.URL}} --header=X-Copies:{{.Copies}} "
+            "--post-data={{.DescriptionText}} " + url
+        ),
     }
 
 

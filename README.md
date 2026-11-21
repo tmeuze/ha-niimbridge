@@ -2,84 +2,109 @@
 
 A Home Assistant (HACS) integration that bridges [HomeBox](https://homebox.software/) label printing to a Niimbot printer through the [hass-niimbot](https://github.com/eigger/hass-niimbot) integration.
 
-HomeBox renders a label, NiimBridge receives it, sizes it for your label stock, and calls `niimbot.print`. BLE is handled entirely by hass-niimbot.
-
-> **Status: 0.1.0, early.** The renderer and the webhook handler are tested, but it hasn't been verified against real printer hardware yet. In particular it sends the label to `niimbot.print` as a `data:` URI in a `dlimg` element; if your hass-niimbot version rejects that, please open an issue.
+HomeBox runs a print command when you print a label; that command posts to a webhook NiimBridge creates in Home Assistant; NiimBridge draws or resizes the label for your label stock and calls `niimbot.print`. Bluetooth is handled entirely by hass-niimbot.
 
 ## Requirements
 
 - Home Assistant 2024.6 or newer
 - [hass-niimbot](https://github.com/eigger/hass-niimbot) installed with your printer added
-- HomeBox with a configurable label print command
+- HomeBox v0.27 or newer (label templates and server-side printing; see [HomeBox's Label Templates guide](https://homebox.software/en/user-guide/label-templates))
+- Optional but recommended: the HomeBox integration for Home Assistant, so NiimBridge can look up an item's asset ID and location (see [Print modes](#print-modes))
 
 ## Install
 
 1. HACS → three-dot menu → Custom repositories → add `https://github.com/tmeuze/ha-niimbridge` as **Integration**.
 2. Download NiimBridge and restart Home Assistant.
 3. Settings → Devices & services → Add integration → **NiimBridge**.
-4. Pick your Niimbot printer and label settings. The last step shows your webhook URL and the exact HomeBox setting to use.
+4. Pick your Niimbot printer and label settings. The last step shows your webhook URL and the exact HomeBox command to use. To see it again later: Settings → Devices & services → NiimBridge → **Configure**.
 
-## Setting up the webhook
+## HomeBox setup
 
-You don't register a webhook yourself. NiimBridge creates one with a random, secret ID when you add the integration.
+HomeBox does not talk to printers itself. Server-side printing is set with an environment variable (it is not a UI setting), and since v0.27 every print needs a label template.
 
-1. **Get the URL.** The final step of setup shows it, along with the full HomeBox command. To see it again later: Settings → Devices & services → NiimBridge → **Configure**. It looks like `http://homeassistant.local:8123/api/webhook/<random-id>`.
-2. **Tell HomeBox to use it.** Set this environment variable on your HomeBox container and restart it (shown here as Docker Compose):
+### 1. Create a label template and make it your default
 
-   ```yaml
-   environment:
-     - HBOX_LABEL_MAKER_PRINT_COMMAND=wget -q -O /dev/null --tries=1 --timeout=10 --header=Content-Type:text/plain --header=X-Title:{{.TitleText}} --header=X-URL:{{.URL}} --post-data={{.DescriptionText}} http://homeassistant.local:8123/api/webhook/<random-id>
-   ```
+HomeBox's quick print and print dialog render a **label template**, so you need at least one, even if you use the text print mode below.
 
-   Your label size in HomeBox (`HBOX_LABEL_MAKER_WIDTH` / `HEIGHT`) can stay as is; NiimBridge rescales to the label size you picked.
-3. **Print.** Use **Print on Server** in HomeBox. The label should print, and the Label preview entity updates.
+1. In HomeBox open **Label Templates** (sidebar, under Profile) → **Import JSON** and choose one of the starter templates from [`homebox-templates/`](homebox-templates): `niimbot-40x12.json`, `niimbot-30x15.json` or `niimbot-50x30.json`. Each is sized in millimetres for that label at 203 DPI, the resolution of Niimbot printers, so it prints 1:1 with no scaling. HomeBox's guide recommends one template per label stock; `scripts/make_homebox_template.py WIDTH_MM HEIGHT_MM` generates other sizes.
+2. On the template card open the **⋯** menu → **Set as default for quick printing**. The default is a personal preference, so each user picks their own.
+3. Optionally use **Share with collection** so other members can use it. Imported templates start private.
 
-Notes:
+The starter template has a QR code (asset URL), the asset ID white on black, the location, a rule and the item name with auto-fit. If you design your own, HomeBox's tips apply: keep text inside a small margin, use **Auto-fit** for item names, and give QR codes room to scan (HomeBox suggests at least 15 mm on a 300 DPI printer; a 12 mm tall label limits the QR code to about 11 mm, so check that your phone scans it).
 
-- The container running HomeBox must be able to reach Home Assistant at that URL. The regular HomeBox image includes `wget` (the hardened image has no tools, so use the regular one). HomeBox runs the command directly, not through a shell, so keep each option free of spaces. If the URL NiimBridge shows isn't reachable from HomeBox, substitute an address that is (for example the HA server's LAN IP).
+### 2. Set the print command
+
+Set `HBOX_LABEL_MAKER_PRINT_COMMAND` on the HomeBox server and restart it. The Configure dialog shows the command with your webhook URL filled in. For Docker Compose:
+
+```yaml
+environment:
+  - HBOX_LABEL_MAKER_PRINT_COMMAND=wget -q -O /dev/null --tries=1 --timeout=10 --header=Content-Type:text/plain --header=X-Title:{{.TitleText}} --header=X-URL:{{.URL}} --header=X-Copies:{{.Copies}} --post-data={{.DescriptionText}} http://homeassistant.local:8123/api/webhook/<random-id>
+```
+
+Notes from HomeBox's documentation that apply here:
+
+- HomeBox splits the command into arguments before substituting values and runs it directly, not through a shell, so each option must contain no spaces. The values of `{{.TitleText}}` and the other placeholders stay inside their own argument.
+- If the command contains `{{.Copies}}`, HomeBox runs it once with the copy count; otherwise it runs it once per copy. NiimBridge uses the `X-Copies` header to print that many labels in one job.
+- HomeBox stops a print command after 60 seconds. NiimBridge replies immediately and prints in the background, so a slow Bluetooth connection causes neither a timeout nor a repeat.
+- The regular HomeBox image includes `wget` (the hardened image has no tools, so use the regular one). The HomeBox container must be able to reach Home Assistant at the webhook URL; if the URL NiimBridge shows isn't reachable from HomeBox, use an address that is, such as the HA server's LAN IP.
 - Webhook URLs need no login, so the random ID is the secret. Don't share it. To get a new one, remove and re-add the integration.
-- To test without HomeBox: `curl -F file=@label.png http://<ha>/api/webhook/<random-id>`
 
-## Inputs
+### 3. Print
 
-**Webhook (primary).** In HomeBox set:
+Use **Print label** on an item (one click uses your default template; the arrow offers template and copies), **Quick Print Selected** on a list, or **Batch print**. Choose the **Label printer** destination when asked. The template editor's **Test print** button sends one label through the same command, which is a handy way to test the whole chain.
+
+HomeBox's `/api/v1/status` reports whether a print command is set (`labelPrinting`). If the **Label printer** option is missing in HomeBox, no print command is configured.
+
+## Print modes
+
+NiimBridge accepts three kinds of request on the same webhook.
+
+**Text mode (recommended).** The command above sends the item's page URL and name. NiimBridge draws the label itself using the layout below. If the HomeBox integration for Home Assistant is installed and logged in to the same HomeBox, NiimBridge uses it to look the item up from the URL, which gives it the asset ID and location (HomeBox's print command no longer passes those). Without that integration the label is drawn from the name and URL only, with no asset ID or location row.
+
+**Image mode.** Print the template's own picture, so the design from HomeBox's editor is exactly what prints:
 
 ```
-HBOX_LABEL_MAKER_PRINT_COMMAND=wget -q -O /dev/null --tries=1 --timeout=10 --header=Content-Type:text/plain --header=X-Title:{{.TitleText}} --header=X-URL:{{.URL}} --post-data={{.DescriptionText}} http://<ha>/api/webhook/<id>
+HBOX_LABEL_MAKER_PRINT_COMMAND=wget -q -O /dev/null --tries=1 --timeout=10 --header=Content-Type:image/png --header=X-Width-Mm:{{.WidthMm}} --header=X-Height-Mm:{{.HeightMm}} --header=X-Copies:{{.Copies}} --post-file={{.FileName}} http://<ha>/api/webhook/<id>
 ```
 
-HomeBox's label text (asset ID or name, URL, and its `Location:` line) is posted as `text/plain` and NiimBridge draws the label itself, so the design below applies and the label always matches your label size.
+NiimBridge sizes the label from `X-Width-Mm` and `X-Height-Mm` (8 dots per mm, so the template's size wins over the preset) and converts the picture with a plain black/white threshold, not dithering, so thin lines and small text stay clean. Make the template the same millimetre size as your label for the sharpest result. HomeBox's template renderer uses its built-in fonts and cannot split a location such as `L1 Kitchen` into an inverted floor, so use text mode if you want those.
 
-If you'd rather print HomeBox's own rendered image, use `--header=Content-Type:image/png --post-file={{.FileName}}` instead of the text options. It is scaled and centred to your label size but its layout is HomeBox's. The webhook also accepts a raw `image/png` body, or JSON for the standard layout:
+**JSON, the service and MQTT.** The webhook also accepts JSON for the standard layout:
 
 ```json
 {"name": "Anker USB-C Charger", "asset_id": "000-042", "area": "L1 Kitchen", "url": "https://homebox.example/item/abc", "copies": 1}
 ```
 
-**MQTT (optional).** The regular HomeBox image also ships `mosquitto_pub`, so you can use `HBOX_LABEL_MAKER_PRINT_COMMAND=mosquitto_pub -h <broker> -u <user> -P <password> -t homebox/labels -f {{.FileName}}` with the PNG topic set to `homebox/labels`. Set a PNG topic and/or a JSON topic in the options. PNG topics take the same image HomeBox would send; JSON topics take the same JSON as above.
+`niimbridge.print_label` prints the same layout from an automation (`preview_only` renders without printing). The regular HomeBox image also ships `mosquitto_pub`: set a PNG topic and/or a JSON topic in the options, and for image mode over MQTT use `mosquitto_pub -h <broker> -u <user> -P <password> -t homebox/labels -f {{.FileName}}` as the print command.
 
-**Service.** `niimbridge.print_label` prints the standard layout from an automation, with `preview_only` to render without printing.
+## The standard label
+
+Drawn in text, JSON, service and MQTT-JSON modes: a QR code on the left (item URL, else asset ID, else name) and three rows on the right:
+
+1. asset ID in a small monospace font, white on black and right-aligned
+2. `Floor | Location`, with the floor inverted, followed by a thin rule. A location written as `L1 Kitchen` is split at its first word when that looks like a floor code (`L1`, `B2`, `3`); other locations such as `Garage` are shown whole with no floor. JSON and the service also accept `floor` and `area` explicitly.
+3. the item name, with the location text removed if the name contains it. It wraps onto more lines when long, shrinking only as far as needed.
+
+All text uses bold DejaVu Sans Mono by default, chosen because it stays legible at 1-bit on small labels (the strokes survive thresholding and `1`, `l` and `I` are clearly different); the asset ID uses the regular weight because heavy strokes fill in on white-on-black. You can set your own font file in the options. The asset ID and location are single lines that shrink to fit; the name is cut off with an ellipsis only at the minimum size. The **Label preview** image entity shows the last rendered label.
 
 ## Label settings
 
 | Setting | Notes |
 |---|---|
-| Label size | Presets are landscape pixels at 203 DPI (30×15, 40×12, 40×30, 50×15, 50×30, 50×80 mm), or custom pixels |
+| Label size | Presets are landscape pixels at 203 DPI (30×15, 40×12, 40×30, 50×15, 50×30, 50×80 mm), or custom pixels. Image mode takes the size from HomeBox instead |
 | Rotation | Applied by niimbot when printing. D110-style tape printers typically need 90 |
-| Density, label type, copies | Passed through to `niimbot.print` |
+| Density, label type, copies | Passed through to `niimbot.print`; copies from HomeBox override the configured value |
 | QR code size | Percent of label height for the standard layout (30–100, default 90) |
-| Font, font size | Optional font file (looked up in `/config/www/fonts`); size 0 auto-fits |
+| Font, font size | Optional font file (looked up in `/config/www/fonts`) replaces the default; size 0 auto-fits |
 
-The standard layout is a QR code on the left (URL, else asset ID, else name) with three single-line rows on the right, with no "Location:" style keys:
+## Troubleshooting
 
-1. asset ID, in a small monospace font, white on black and right-aligned
-2. area name (HomeBox's parent location, or `area`/`location` in JSON), followed by a thin horizontal rule
-3. item name, with the area name removed (so "Kitchen Lamp" in "Kitchen" prints as "Lamp")
-
-The asset ID and area are single lines that shrink to fit. The item name wraps onto extra lines when it is long, shrinking only as far as needed, and is cut off with an ellipsis only at the minimum size. HomeBox sends the item's immediate parent location, which is shown as the area, so include the floor in your area names (for example `L3 Kitchen`). If you send HomeBox's own PNG instead of JSON, the QR size comes from HomeBox. Set HomeBox's label width and height to the same aspect ratio as your label so the image isn't shrunk to fit.
-
-The **Label preview** image entity shows the last rendered label.
+- **Nothing happens when printing in HomeBox.** Check that a default template exists (quick print is disabled without one) and that `labelPrinting` is true at `/api/v1/status`. Then test the webhook without HomeBox: `curl -i -X POST -H "Content-Type: text/plain" -H "X-Title: Test" http://<ha>/api/webhook/<random-id>` should answer `202`.
+- **Label has no asset ID or location.** In text mode that needs the HomeBox integration for Home Assistant to look the item up, because HomeBox's print command only receives the item name and URL.
+- **Text or lines look speckled.** Use text mode, or image mode with a template that matches your label's millimetre size at 203 DPI.
+- **Printing is slow.** Most of the time is the Bluetooth connection in hass-niimbot; see its connection options. Turn on debug logging (`custom_components.niimbridge: debug`) to see when each request arrives.
+- **Several copies when you expected one.** Make sure `--header=X-Copies:{{.Copies}}` is in the command and the copies setting is 1.
 
 ## License
 
-MIT
+MIT. The bundled font DejaVu Sans Mono has its own license in `custom_components/niimbridge/fonts/LICENSE_DEJAVU.txt`.

@@ -1,0 +1,160 @@
+{
+  "name": "NiimBridge 30x15 mm",
+  "description": "Niimbot 30x15 mm label: QR, asset ID (inverted), location, name.",
+  "width": 30.0,
+  "height": 15.0,
+  "dpi": 203,
+  "preset": null,
+  "outputFormat": "png",
+  "isShared": false,
+  "offsetX": 0,
+  "offsetY": 0,
+  "canvasData": {
+    "version": "6.0.0",
+    "objects": [
+      {
+        "originX": "left",
+        "originY": "top",
+        "scaleX": 1,
+        "scaleY": 1,
+        "angle": 0,
+        "type": "Group",
+        "left": 2.55,
+        "top": 2.55,
+        "width": 51.59,
+        "height": 51.59,
+        "objects": [
+          {
+            "type": "Rect",
+            "left": -25.8,
+            "top": -25.8,
+            "width": 51.59,
+            "height": 51.59,
+            "fill": "#f0f0f0",
+            "stroke": "#cccccc",
+            "strokeWidth": 1,
+            "originX": "left",
+            "originY": "top",
+            "scaleX": 1,
+            "scaleY": 1,
+            "angle": 0
+          },
+          {
+            "type": "IText",
+            "text": "[QR]",
+            "left": -20.8,
+            "top": -8,
+            "fontSize": 12,
+            "fontFamily": "Arial",
+            "fill": "#666666",
+            "originX": "left",
+            "originY": "top",
+            "scaleX": 1,
+            "scaleY": 1,
+            "angle": 0
+          }
+        ],
+        "data": {
+          "type": "barcode",
+          "format": "qr",
+          "contentSource": "asset_url"
+        }
+      },
+      {
+        "originX": "left",
+        "originY": "top",
+        "scaleX": 1,
+        "scaleY": 1,
+        "angle": 0,
+        "type": "rect",
+        "left": 83.76,
+        "top": 2.55,
+        "width": 27.07,
+        "height": 14.74,
+        "fill": "#000000"
+      },
+      {
+        "originX": "left",
+        "originY": "top",
+        "scaleX": 1,
+        "scaleY": 1,
+        "angle": 0,
+        "type": "textbox",
+        "text": "{{asset_id}}",
+        "left": 84.76,
+        "top": 3.05,
+        "width": 25.07,
+        "fontSize": 11.8,
+        "fill": "#ffffff",
+        "textAlign": "right",
+        "data": {
+          "autofit": true,
+          "wrap": true,
+          "fixedWidth": 25.07,
+          "fixedHeight": 13.74,
+          "maxFontSize": 11.8
+        }
+      },
+      {
+        "originX": "left",
+        "originY": "top",
+        "scaleX": 1,
+        "scaleY": 1,
+        "angle": 0,
+        "type": "textbox",
+        "text": "{{location}}",
+        "left": 56.69,
+        "top": 17.79,
+        "width": 54.14,
+        "fontSize": 9.1,
+        "fill": "#000000",
+        "textAlign": "left",
+        "data": {
+          "autofit": true,
+          "wrap": true,
+          "fixedWidth": 54.14,
+          "fixedHeight": 10.34,
+          "maxFontSize": 9.1
+        }
+      },
+      {
+        "originX": "left",
+        "originY": "top",
+        "scaleX": 1,
+        "scaleY": 1,
+        "angle": 0,
+        "type": "line",
+        "left": 56.69,
+        "top": 28.63,
+        "x1": 0,
+        "y1": 0,
+        "x2": 54.14,
+        "y2": 0,
+        "stroke": "#000000",
+        "strokeWidth": 0.75
+      },
+      {
+        "originX": "left",
+        "originY": "top",
+        "scaleX": 1,
+        "scaleY": 1,
+        "angle": 0,
+        "type": "textbox",
+        "text": "{{name}}",
+        "left": 56.69,
+        "top": 30.9,
+        "width": 54.14,
+        "fontSize": 19.3,
+        "fill": "#000000",
+        "textAlign": "left",
+        "data": {
+          "autofit": true,
+          "wrap": true,
+          "fixedWidth": 54.14,
+          "fixedHeight": 23.24,
+          "maxFontSize": 19.3
+        }
+      }
+    ]
+  }
+}
