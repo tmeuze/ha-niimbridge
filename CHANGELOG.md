@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1] - 2026-11-20
+
+### Fixed
+
+- The Label preview image entity updated from a worker thread, which Home Assistant logged as an error and which stopped the preview refreshing. The update handler now runs in the event loop.
+- Debug logging shows whether the HomeBox lookup found the item.
+
 ## [0.3.0] - 2026-11-20
 
 Adapts NiimBridge to HomeBox v0.27, which replaced the built-in label with label templates.

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from homeassistant.components.image import ImageEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.util import dt as dt_util
@@ -39,6 +39,7 @@ class NiimBridgePreview(ImageEntity):
             )
         )
 
+    @callback
     def _handle_update(self) -> None:
         self._attr_image_last_updated = dt_util.utcnow()
         self.async_write_ha_state()
