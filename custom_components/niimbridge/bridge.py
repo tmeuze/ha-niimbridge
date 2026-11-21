@@ -39,11 +39,18 @@ from .const import (
     DEFAULT_QR_PERCENT,
     DEFAULT_ROTATE,
     DOMAIN,
+    DOTS_PER_MM,
     LABEL_SIZE_PRESETS,
     MAX_UPLOAD_BYTES,
     SIGNAL_LABEL_UPDATED,
 )
-from .renderer import LabelSpec, fit_image_to_label, parse_homebox_text, render_item_label
+from .renderer import (
+    LabelSpec,
+    entity_id_from_url,
+    fit_image_to_label,
+    parse_homebox_text,
+    render_item_label,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -136,6 +143,31 @@ class NiimBridge:
 
             self._unsubs.append(await mqtt.async_subscribe(self.hass, json_topic, _json))
 
+    def _template_meta(self, headers: Any) -> dict[str, Any]:
+        """Label size and copies that HomeBox's print command may send as headers."""
+
+        def num(name: str) -> float | None:
+            try:
+                value = float(headers.get(name, ""))
+            except ValueError:
+                return None
+            return value if value > 0 else None
+
+        meta: dict[str, Any] = {}
+        w_mm, h_mm = num("X-Width-Mm"), num("X-Height-Mm")
+        if w_mm and h_mm:
+            spec = self.spec
+            meta["spec"] = LabelSpec(
+                min(1600, max(10, round(w_mm * DOTS_PER_MM))),
+                min(1600, max(10, round(h_mm * DOTS_PER_MM))),
+                spec.font_path,
+                spec.font_size,
+                spec.qr_percent,
+            )
+        if copies := num("X-Copies"):
+            meta["copies"] = min(50, max(1, int(copies)))
+        return meta
+
     # -- inputs --------------------------------------------------------------
 
     async def _handle_webhook(
@@ -155,19 +187,27 @@ class NiimBridge:
                 )
                 if png is None:
                     return web.Response(status=400, text="No file field in form")
-                self._queue(self.async_print_png(png))
+                self._queue(self.async_print_png(png, **self._template_meta(request.headers)))
             elif ctype.startswith("image/") or ctype == "application/octet-stream":
-                self._queue(self.async_print_png(await request.read()))
-            elif ctype == "text/plain":
-                # HomeBox template fields: X-Title / X-URL headers, description body.
-                data = parse_homebox_text(
-                    request.headers.get("X-Title", ""),
-                    await request.text(),
-                    request.headers.get("X-URL", ""),
+                self._queue(
+                    self.async_print_png(
+                        await request.read(), **self._template_meta(request.headers)
+                    )
                 )
-                if not data.get("name") and not data.get("asset_id"):
-                    raise ValueError("text label needs an X-Title header")
-                self._queue(self.async_print_item(data))
+            elif ctype == "text/plain":
+                # HomeBox print command fields: X-Title / X-URL headers; the body
+                # carries the description on pre-0.27 HomeBox versions.
+                title = request.headers.get("X-Title", "")
+                url = request.headers.get("X-URL", "")
+                body = await request.text()
+                if not (title or url):
+                    raise ValueError("text label needs an X-Title or X-URL header")
+                meta = self._template_meta(request.headers)
+                self._queue(
+                    self.async_print_homebox_text(
+                        title, body, url, copies=meta.get("copies")
+                    )
+                )
             elif ctype == "application/json":
                 data = await request.json()
                 if not isinstance(data, dict) or not (
@@ -201,10 +241,54 @@ class NiimBridge:
 
         self.entry.async_create_background_task(self.hass, _run(), "niimbridge_print")
 
-    async def async_print_png(self, png: bytes, *, preview_only: bool = False) -> None:
-        spec = self.spec
+    async def async_print_png(
+        self,
+        png: bytes,
+        *,
+        preview_only: bool = False,
+        spec: LabelSpec | None = None,
+        copies: int | None = None,
+    ) -> None:
+        spec = spec or self.spec
         label = await self.hass.async_add_executor_job(fit_image_to_label, spec, png)
-        await self._async_send(label, preview_only=preview_only)
+        await self._async_send(label, preview_only=preview_only, copies=copies, spec=spec)
+
+    async def _lookup_homebox_entity(self, url: str) -> dict[str, str] | None:
+        """Fetch name, asset ID and location for a HomeBox page URL, if possible.
+
+        Uses the API client of the HomeBox integration when it is installed, so
+        NiimBridge needs no credentials of its own.
+        """
+        entity_id = entity_id_from_url(url)
+        if not entity_id:
+            return None
+        for entry in self.hass.config_entries.async_entries("homebox"):
+            api = getattr(getattr(entry, "runtime_data", None), "api", None)
+            if api is None:
+                continue
+            try:
+                entity = await api.async_get_hb_item(entity_id)
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.debug("HomeBox lookup failed for %s: %s", entity_id, err)
+                continue
+            parent = entity.get("parent") or entity.get("location") or {}
+            return {
+                "name": str(entity.get("name") or ""),
+                "asset_id": str(entity.get("assetId") or ""),
+                "location": str(parent.get("name") or "") if isinstance(parent, dict) else "",
+            }
+        return None
+
+    async def async_print_homebox_text(
+        self, title: str, body: str, url: str, *, copies: int | None = None
+    ) -> None:
+        """Print a label from HomeBox's print-command fields."""
+        data = parse_homebox_text(title, body, url)
+        if found := await self._lookup_homebox_entity(url):
+            data.update({k: v for k, v in found.items() if v})
+        if copies:
+            data["copies"] = copies
+        await self.async_print_item(data)
 
     async def async_print_item(
         self, data: dict[str, Any], *, preview_only: bool = False
@@ -215,11 +299,12 @@ class NiimBridge:
         label = await self.hass.async_add_executor_job(
             render_item_label,
             spec,
-            str(data["name"]),
+            str(data.get("name", "")),
             str(data.get("asset_id", "")),
             str(data.get("location", "")),
             str(data.get("url", "")),
             str(data.get("area", "")),
+            str(data.get("floor", "")),
         )
         await self._async_send(label, preview_only=preview_only, copies=data.get("copies"))
 
@@ -229,17 +314,23 @@ class NiimBridge:
         async_dispatcher_send(self.hass, f"{SIGNAL_LABEL_UPDATED}_{self.entry.entry_id}")
 
     async def _async_send(
-        self, png: bytes, *, preview_only: bool, copies: int | None = None
+        self,
+        png: bytes,
+        *,
+        preview_only: bool,
+        copies: int | None = None,
+        spec: LabelSpec | None = None,
     ) -> None:
         self._store_preview(png)
         if preview_only:
             return
         async with self._print_lock:
-            await self._async_call_niimbot(png, copies)
+            await self._async_call_niimbot(png, copies, spec or self.spec)
 
-    async def _async_call_niimbot(self, png: bytes, copies: int | None) -> None:
+    async def _async_call_niimbot(
+        self, png: bytes, copies: int | None, spec: LabelSpec
+    ) -> None:
         s = self.settings
-        spec = self.spec
         image_uri = "data:image/png;base64," + base64.b64encode(png).decode()
         await self.hass.services.async_call(
             "niimbot",

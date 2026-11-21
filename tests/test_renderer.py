@@ -85,3 +85,43 @@ def test_long_name_wraps_to_multiple_lines():
     )
     assert len(lines) >= 2
     assert all(draw.textlength(line, font=font) <= 220 for line in lines)
+
+
+def test_fit_image_is_thresholded_not_dithered():
+    from PIL import ImageDraw
+
+    src = Image.new("RGB", (472, 142), "white")
+    d = ImageDraw.Draw(src)
+    d.text((10, 10), "TroubleSense Kitchen", fill="black", font=renderer._mono(22))
+    d.line((10, 60, 460, 60), fill="black", width=1)
+    buf = BytesIO()
+    src.save(buf, "PNG")
+    out = Image.open(BytesIO(renderer.fit_image_to_label(renderer.LabelSpec(320, 96), buf.getvalue()))).convert("L")
+    px = out.load()
+    # The thin rule must survive as a continuous line (about y=40 after scaling).
+    rows = [y for y in range(out.height) if sum(px[x, y] == 0 for x in range(20, 300)) > 250]
+    assert rows, "1px rule was lost or dithered away"
+
+
+def test_split_floor():
+    assert renderer.split_floor("L1 Kitchen") == ("L1", "Kitchen")
+    assert renderer.split_floor("B2 Boiler Room") == ("B2", "Boiler Room")
+    assert renderer.split_floor("Kitchen") == ("", "Kitchen")
+    assert renderer.split_floor("Garage Left") == ("", "Garage Left")
+    assert renderer.split_floor("L1") == ("", "L1")
+
+
+def test_entity_id_from_url():
+    uid = "01cafe97-e8fe-43c1-bdb7-2495e38b6889"
+    assert renderer.entity_id_from_url(f"https://hb.example/item/{uid}") == uid
+    assert renderer.entity_id_from_url("https://hb.example/a/000-042") is None
+
+
+def test_floor_badge_is_inverted():
+    spec = renderer.LabelSpec(320, 96)
+    img = Image.open(BytesIO(renderer.render_item_label(spec, "Lamp", "000-1", "L1 Kitchen", "u"))).convert("L")
+    # The floor badge sits at the start of the text column; find a solid black run there.
+    px = img.load()
+    text_x = 4 + int(96 * 0.9) + 4
+    assert any(px[x, y] == 0 and px[x + 1, y] == 0 and px[x, y + 1] == 0
+               for x in range(text_x, text_x + 20) for y in range(20, 40))

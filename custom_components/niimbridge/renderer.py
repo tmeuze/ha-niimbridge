@@ -24,11 +24,18 @@ class LabelSpec:
 
 
 def _font(spec: LabelSpec, size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
-    if spec.font_path:
+    """The configured font, else bold DejaVu Sans Mono.
+
+    The bold monospace face stays legible at 1-bit on small labels: the strokes
+    survive thresholding and 1, l and I are clearly different.
+    """
+    for path in (spec.font_path, MONO_BOLD_FONT):
+        if not path:
+            continue
         try:
-            return ImageFont.truetype(spec.font_path, size)
+            return ImageFont.truetype(path, size)
         except OSError:
-            pass
+            continue
     return ImageFont.load_default(size)
 
 
@@ -43,6 +50,7 @@ def _qr_image(data: str, size: int) -> Image.Image:
 
 
 MONO_FONT = str(Path(__file__).parent / "fonts" / "DejaVuSansMono.ttf")
+MONO_BOLD_FONT = str(Path(__file__).parent / "fonts" / "DejaVuSansMono-Bold.ttf")
 
 
 def strip_location_from_name(name: str, *places: str) -> str:
@@ -82,6 +90,28 @@ def parse_homebox_text(title: str, description: str, url: str = "") -> dict[str,
     elif m := re.search(r"/a/([0-9-]+)", url):
         asset_id = m.group(1)
     return {"name": name, "asset_id": asset_id, "location": location, "url": url}
+
+
+_FLOOR_TOKEN_RE = re.compile(r"^[A-Za-z]{0,2}-?[0-9]{1,2}$")
+_ENTITY_ID_RE = re.compile(r"/(?:item|location)/([0-9a-fA-F-]{36})")
+
+
+def split_floor(location: str) -> tuple[str, str]:
+    """Split "L1 Kitchen" into ("L1", "Kitchen").
+
+    The floor is the first word when it looks like a floor code (L1, B2, 3).
+    Anything else is returned unchanged as the location.
+    """
+    first, _, rest = location.strip().partition(" ")
+    if rest.strip() and _FLOOR_TOKEN_RE.match(first):
+        return first, rest.strip()
+    return "", location.strip()
+
+
+def entity_id_from_url(url: str) -> str | None:
+    """Return the HomeBox entity UUID from an item or location page URL."""
+    m = _ENTITY_ID_RE.search(url or "")
+    return m.group(1) if m else None
 
 
 def _mono(size: int) -> Any:
@@ -162,13 +192,19 @@ def render_item_label(
     location: str = "",
     url: str = "",
     area: str = "",
+    floor: str = "",
 ) -> bytes:
-    """Standard layout: QR on the left; asset ID (mono), area, then name.
+    """Standard layout: QR on the left; asset ID (inverted), floor | area, then name.
+
+    A location such as "L1 Kitchen" is split into an inverted "L1" and "Kitchen".
 
     The asset ID and area are single lines that shrink to fit. The name may wrap
     onto several lines, shrinking only as far as needed to fit the label.
     """
     area = area or location
+    full_area = area
+    if not floor:
+        floor, area = split_floor(area)
     img = Image.new("1", (spec.width, spec.height), 1)
     draw = ImageDraw.Draw(img)
     pad = max(4, spec.height // 12)
@@ -187,12 +223,12 @@ def render_item_label(
         return _font(spec, size)
 
     place = area
-    display_name = strip_location_from_name(name, area) if name else ""
+    display_name = strip_location_from_name(name, full_area) if name else ""
 
     # Asset ID and area take fixed shares of the height; the name gets the rest
     # and may wrap onto several lines.
     asset_h = int(box_h * 0.22) if asset_id else 0
-    place_h = int(box_h * 0.24) if place else 0
+    place_h = int(box_h * 0.24) if (place or floor) else 0
     name_h = box_h - asset_h - place_h
 
     name_lines: list[str] = []
@@ -222,15 +258,31 @@ def render_item_label(
         draw.text((x0 + inset - left, y + inset - top), fitted, font=font, fill=1)
         y += max(asset_h, h + 2 * inset)
 
-    if place:
-        fitted, font = _one_line(
-            draw, place, regular, box_w, max_size=int(place_h / 1.35)
-        )
-        draw.text((text_x, y), fitted, font=font, fill=0)
-        place_bottom = y + draw.textbbox((0, 0), fitted, font=font)[3]
+    if place or floor:
+        size_max = int(place_h / 1.35)
+        inset = max(2, place_h // 10)
+        if floor:
+            combined, font = _one_line(
+                draw, f"{floor}  |  {place}".rstrip(" |"), regular, box_w, max_size=size_max
+            )
+            tail = combined.split("|", 1)[1].strip() if "|" in combined else ""
+            fl, ft, fr, fb = draw.textbbox((0, 0), floor, font=font)
+            bw, bh = fr - fl + 2 * inset, fb - ft + 2 * inset
+            draw.rectangle((text_x, y, text_x + bw - 1, y + bh - 1), fill=0)
+            draw.text((text_x + inset - fl, y + inset - ft), floor, font=font, fill=1)
+            place_bottom = y + bh
+            if tail:
+                bar_x = text_x + bw + inset
+                draw.line((bar_x, y + 1, bar_x, y + bh - 2), fill=0, width=1)
+                tl, tt, tr, tb = draw.textbbox((0, 0), tail, font=font)
+                draw.text((bar_x + inset + 1 - tl, y + inset - tt), tail, font=font, fill=0)
+        else:
+            fitted, font = _one_line(draw, place, regular, box_w, max_size=size_max)
+            draw.text((text_x, y), fitted, font=font, fill=0)
+            place_bottom = y + draw.textbbox((0, 0), fitted, font=font)[3]
         y += place_h
         if name_lines:
-            # Thin rule centred between the area text and the top of the name.
+            # Thin rule centred between the area row and the top of the name.
             name_top = y + draw.textbbox((0, 0), name_lines[0], font=name_font)[1]
             rule_y = (place_bottom + name_top) // 2
             draw.line((text_x, rule_y, text_x + box_w - 1, rule_y), fill=0, width=1)
@@ -242,6 +294,9 @@ def render_item_label(
             y += int(size * 1.15)
 
     return _to_png(img)
+
+
+THRESHOLD = 176
 
 
 def fit_image_to_label(spec: LabelSpec, png: bytes) -> bytes:
@@ -258,7 +313,10 @@ def fit_image_to_label(spec: LabelSpec, png: bytes) -> bytes:
     src = ImageOps.contain(src, (spec.width, spec.height), Image.LANCZOS)
     canvas = Image.new("L", (spec.width, spec.height), 255)
     canvas.paste(src, ((spec.width - src.width) // 2, (spec.height - src.height) // 2))
-    return _to_png(canvas.convert("1"))
+    # Plain threshold, not Pillow's default dithering, which turns anti-aliased
+    # text and thin rules into speckle. The high cut-off keeps 1px lines that
+    # downscaling has turned light grey.
+    return _to_png(canvas.point(lambda p: 255 if p >= THRESHOLD else 0).convert("1"))
 
 
 def _to_png(img: Image.Image) -> bytes:
