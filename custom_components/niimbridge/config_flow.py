@@ -25,6 +25,7 @@ from .const import (
     CONF_ROTATE,
     CONF_WEBHOOK_ID,
     CONF_WIDTH,
+    AUTO_SIZE,
     CUSTOM_SIZE,
     DEFAULT_COPIES,
     DEFAULT_DENSITY,
@@ -60,6 +61,7 @@ def _label_schema(defaults: dict[str, Any], *, with_device: bool) -> vol.Schema:
                             selector.SelectOptionDict(value=k, label=f"{k} mm")
                             for k in LABEL_SIZE_PRESETS
                         ],
+                        selector.SelectOptionDict(value=AUTO_SIZE, label="Auto (from the loaded roll)"),
                         selector.SelectOptionDict(value=CUSTOM_SIZE, label="Custom (pixels)"),
                     ],
                     mode=selector.SelectSelectorMode.DROPDOWN,
@@ -75,11 +77,12 @@ def _label_schema(defaults: dict[str, Any], *, with_device: bool) -> vol.Schema:
                 selector.SelectSelectorConfig(options=["0", "90", "180", "270"])
             ),
             vol.Required(CONF_DENSITY, default=d(CONF_DENSITY, DEFAULT_DENSITY)): selector.NumberSelector(
-                selector.NumberSelectorConfig(min=1, max=5, mode=selector.NumberSelectorMode.BOX)
+                selector.NumberSelectorConfig(min=0, max=20, mode=selector.NumberSelectorMode.BOX)
             ),
             vol.Required(CONF_LABEL_TYPE, default=str(d(CONF_LABEL_TYPE, DEFAULT_LABEL_TYPE))): selector.SelectSelector(
                 selector.SelectSelectorConfig(
                     options=[
+                        selector.SelectOptionDict(value="0", label="Printer default"),
                         selector.SelectOptionDict(value="1", label="With gaps"),
                         selector.SelectOptionDict(value="2", label="Black"),
                         selector.SelectOptionDict(value="3", label="Continuous"),

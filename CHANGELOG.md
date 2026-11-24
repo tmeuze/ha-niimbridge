@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.2] - 2026-11-23
+
+### Changed
+
+- Density and label type are now optional and default to "printer default": they are only sent to `niimbot.print` when set. On a D110-M, sending density 3 and label type 1 made hass-niimbot fail ("No response for request 0xe3"); the same label without them printed. **Existing entries keep their saved values: open Configure and set density to 0 and label type to Printer default.**
+- New **Auto** label size reads the loaded roll's size from hass-niimbot's Cloud Label Info sensor (needs "Fetch Label Info Online" in the Niimbot integration and an RFID roll), falling back to the custom size.
+- README: label details from the printer, multiple printers, and troubleshooting for the errors above.
+
 ## [0.3.1] - 2026-11-20
 
 ### Fixed
