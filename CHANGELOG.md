@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.4.0] - 2026-11-24
+
+### Added
+
+- **Routing by label size.** With several NiimBridge entries (one per printer), a request from HomeBox goes to the entry whose label size matches the template's size (`X-Width-Mm` / `X-Height-Mm`, within 1 mm, orientation ignored). HomeBox's single print command can therefore serve several printers, one template per label stock. The command shown in Configure now includes those two headers; update the HomeBox command to use it.
+
 ## [0.3.2] - 2026-11-23
 
 ### Changed

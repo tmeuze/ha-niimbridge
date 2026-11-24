@@ -114,6 +114,7 @@ def _webhook_placeholders(hass: Any, webhook_id: str) -> dict[str, str]:
             "HBOX_LABEL_MAKER_PRINT_COMMAND=wget -q -O /dev/null --tries=1 --timeout=10 "
             "--header=Content-Type:text/plain --header=X-Title:{{.TitleText}} "
             "--header=X-URL:{{.URL}} --header=X-Copies:{{.Copies}} "
+            "--header=X-Width-Mm:{{.WidthMm}} --header=X-Height-Mm:{{.HeightMm}} "
             "--post-data={{.DescriptionText}} " + url
         ),
     }

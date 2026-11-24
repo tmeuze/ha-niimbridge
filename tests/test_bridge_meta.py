@@ -121,3 +121,64 @@ def test_auto_size_falls_back_without_roll_info():
         assert (bridge.spec.width, bridge.spec.height) == (400, 240)
     finally:
         patcher.stop()
+
+
+def _two_printers():
+    """A 40x12 mm printer (receiving) and a 50x30 mm printer sharing one hass."""
+    hass = MagicMock()
+    hass.config.path = lambda *a: "/x"
+    hass.data = {}
+
+    def make(entry_id, size):
+        entry = MagicMock(entry_id=entry_id)
+        entry.data = {"device_id": entry_id, "webhook_id": entry_id, "label_size": size}
+        entry.options = {}
+        bridge = NiimBridge(hass, entry)
+        hass.data.setdefault("niimbridge", {})[entry_id] = bridge
+        return bridge
+
+    return make("d110", "40x12"), make("b1", "50x30")
+
+
+def test_routes_to_printer_with_matching_label_size():
+    d110, b1 = _two_printers()
+    assert d110._route({"X-Width-Mm": "50", "X-Height-Mm": "30"}) is b1
+    assert d110._route({"X-Width-Mm": "30", "X-Height-Mm": "50"}) is b1  # orientation ignored
+
+
+def test_receiving_printer_wins_when_it_matches():
+    d110, b1 = _two_printers()
+    assert d110._route({"X-Width-Mm": "40", "X-Height-Mm": "12"}) is d110
+    assert b1._route({"X-Width-Mm": "50", "X-Height-Mm": "30"}) is b1
+
+
+def test_stays_put_without_a_match_or_size():
+    d110, b1 = _two_printers()
+    assert d110._route({"X-Width-Mm": "62", "X-Height-Mm": "29"}) is d110
+    assert d110._route({}) is d110
+    assert d110._route({"X-Width-Mm": "abc", "X-Height-Mm": "30"}) is d110
+
+
+def test_tolerance_allows_small_template_rounding():
+    d110, b1 = _two_printers()
+    assert d110._route({"X-Width-Mm": "49.6", "X-Height-Mm": "30.4"}) is b1
+
+
+def test_webhook_request_is_handled_by_the_routed_printer():
+    import asyncio
+    from unittest.mock import AsyncMock
+
+    d110, b1 = _two_printers()
+    d110._queue = MagicMock()
+    b1._queue = MagicMock()
+    b1.async_print_homebox_text = MagicMock(return_value="job")
+    d110.async_print_homebox_text = MagicMock(return_value="job")
+    request = MagicMock()
+    request.content_length = 10
+    request.content_type = "text/plain"
+    request.headers = {"X-Title": "Lamp", "X-URL": "https://hb/item/x", "X-Width-Mm": "50", "X-Height-Mm": "30"}
+    request.text = AsyncMock(return_value="")
+    response = asyncio.run(d110._handle_webhook(d110.hass, "d110", request))
+    assert response.status == 202
+    b1.async_print_homebox_text.assert_called_once()
+    d110.async_print_homebox_text.assert_not_called()

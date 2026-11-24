@@ -42,6 +42,7 @@ from .const import (
     DEFAULT_ROTATE,
     DOMAIN,
     DOTS_PER_MM,
+    ROUTE_TOLERANCE_MM,
     LABEL_SIZE_PRESETS,
     MAX_UPLOAD_BYTES,
     SIGNAL_LABEL_UPDATED,
@@ -199,11 +200,58 @@ class NiimBridge:
             meta["copies"] = min(50, max(1, int(copies)))
         return meta
 
+    # -- routing -------------------------------------------------------------
+
+    def label_mm(self) -> tuple[float, float]:
+        """This printer's label size in mm as (long side, short side)."""
+        spec = self.spec
+        long_px, short_px = max(spec.width, spec.height), min(spec.width, spec.height)
+        return long_px / DOTS_PER_MM, short_px / DOTS_PER_MM
+
+    def _route(self, headers: Any) -> NiimBridge:
+        """Pick the NiimBridge entry whose label size matches the request.
+
+        HomeBox sends the template's size (X-Width-Mm / X-Height-Mm), and its
+        docs recommend one template per label stock, so the size identifies the
+        printer. The receiving entry wins when it matches; with no match (or no
+        size) the request stays with the receiving entry.
+        """
+        try:
+            w_mm, h_mm = float(headers.get("X-Width-Mm")), float(headers.get("X-Height-Mm"))
+        except (TypeError, ValueError):
+            return self
+        long_mm, short_mm = max(w_mm, h_mm), min(w_mm, h_mm)
+
+        def matches(bridge: NiimBridge) -> bool:
+            b_long, b_short = bridge.label_mm()
+            return (
+                abs(b_long - long_mm) <= ROUTE_TOLERANCE_MM
+                and abs(b_short - short_mm) <= ROUTE_TOLERANCE_MM
+            )
+
+        if matches(self):
+            return self
+        for bridge in self.hass.data.get(DOMAIN, {}).values():
+            if bridge is not self and matches(bridge):
+                _LOGGER.debug(
+                    "Routing %.1fx%.1f mm label from %s to %s",
+                    long_mm,
+                    short_mm,
+                    self.entry.entry_id,
+                    bridge.entry.entry_id,
+                )
+                return bridge
+        return self
+
     # -- inputs --------------------------------------------------------------
 
     async def _handle_webhook(
         self, hass: HomeAssistant, webhook_id: str, request: web.Request
     ) -> web.Response:
+        target = self._route(request.headers)
+        return await target._handle_request(request)
+
+    async def _handle_request(self, request: web.Request) -> web.Response:
         if (request.content_length or 0) > MAX_UPLOAD_BYTES:
             return web.Response(status=413, text="Payload too large")
         ctype = request.content_type or ""

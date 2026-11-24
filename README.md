@@ -38,7 +38,7 @@ Set `HBOX_LABEL_MAKER_PRINT_COMMAND` on the HomeBox server and restart it. The C
 
 ```yaml
 environment:
-  - HBOX_LABEL_MAKER_PRINT_COMMAND=wget -q -O /dev/null --tries=1 --timeout=10 --header=Content-Type:text/plain --header=X-Title:{{.TitleText}} --header=X-URL:{{.URL}} --header=X-Copies:{{.Copies}} --post-data={{.DescriptionText}} http://homeassistant.local:8123/api/webhook/<random-id>
+  - HBOX_LABEL_MAKER_PRINT_COMMAND=wget -q -O /dev/null --tries=1 --timeout=10 --header=Content-Type:text/plain --header=X-Title:{{.TitleText}} --header=X-URL:{{.URL}} --header=X-Copies:{{.Copies}} --header=X-Width-Mm:{{.WidthMm}} --header=X-Height-Mm:{{.HeightMm}} --post-data={{.DescriptionText}} http://homeassistant.local:8123/api/webhook/<random-id>
 ```
 
 Notes from HomeBox's documentation that apply here:
@@ -109,7 +109,15 @@ This needs a roll with an RFID tag. With other rolls the sensor has no size, and
 
 ## Multiple printers
 
-Each NiimBridge entry drives one printer, with its own settings and its own webhook URL and preview image. Add the integration once per printer (Settings → Devices & services → NiimBridge → **Add service**). `niimbridge.print_label` needs `config_entry_id` when there is more than one entry. HomeBox supports only one print command, so a HomeBox print button reaches one printer; use the service from an automation for the others.
+Each NiimBridge entry drives one printer, with its own settings, webhook URL and preview image. Add the integration once per printer (Settings → Devices & services → NiimBridge → **Add service**) and give each its own label size.
+
+HomeBox supports only one print command, so it can only call one webhook. NiimBridge therefore **routes by label size**: HomeBox sends the template's size in `X-Width-Mm` and `X-Height-Mm` (the commands above include them), and the request goes to the NiimBridge entry whose label size matches, within 1 mm and ignoring orientation. This fits HomeBox's own practice of one template per label stock:
+
+1. Create one HomeBox template per label stock (for example 40×12 mm for the D110-M, 50×30 mm for the B1), each at that label's exact millimetre size.
+2. Give each NiimBridge entry the matching label size.
+3. Put any one entry's command in HomeBox. Which entry receives the request doesn't matter: it forwards to the right printer. If no entry matches, or the size isn't sent, the receiving entry prints it.
+
+With **Auto** label size, an entry matches the size of the roll currently loaded in its printer. If two entries have the same label size, the receiving entry wins, then the first match. Routing applies to HomeBox's webhook requests; `niimbridge.print_label` needs `config_entry_id` when there is more than one entry, and MQTT topics belong to the entry that subscribes to them.
 
 ## Troubleshooting
 
