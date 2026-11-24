@@ -13,6 +13,7 @@ from aiohttp import web
 from homeassistant.components import webhook
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 
 from .const import (
@@ -30,6 +31,7 @@ from .const import (
     CONF_ROTATE,
     CONF_WEBHOOK_ID,
     CONF_WIDTH,
+    AUTO_SIZE,
     CUSTOM_SIZE,
     DEFAULT_COPIES,
     DEFAULT_DENSITY,
@@ -73,7 +75,10 @@ class NiimBridge:
     def spec(self) -> LabelSpec:
         s = self.settings
         size = s.get(CONF_LABEL_SIZE, DEFAULT_LABEL_SIZE)
-        if size in LABEL_SIZE_PRESETS and size != CUSTOM_SIZE:
+        roll = self._roll_size_px() if size == AUTO_SIZE else None
+        if roll:
+            width, height = roll
+        elif size in LABEL_SIZE_PRESETS and size not in (CUSTOM_SIZE, AUTO_SIZE):
             width, height = LABEL_SIZE_PRESETS[size]
         else:
             width, height = int(s.get(CONF_WIDTH, 320)), int(s.get(CONF_HEIGHT, 96))
@@ -86,6 +91,32 @@ class NiimBridge:
             int(s.get(CONF_FONT_SIZE, DEFAULT_FONT_SIZE)),
             int(s.get(CONF_QR_PERCENT, DEFAULT_QR_PERCENT)),
         )
+
+    def _roll_size_px(self) -> tuple[int, int] | None:
+        """Landscape label size in dots from the printer's loaded roll, if known.
+
+        hass-niimbot's Cloud Label Info sensor carries the roll's size when
+        "Fetch Label Info Online" is enabled and an RFID roll is loaded.
+        """
+        registry = er.async_get(self.hass)
+        for entity in er.async_entries_for_device(registry, self.settings[CONF_DEVICE_ID]):
+            if entity.platform != "niimbot" or entity.translation_key != "cloud_label_info":
+                continue
+            state = self.hass.states.get(entity.entity_id)
+            attrs = state.attributes if state else {}
+            try:
+                w_mm = float(attrs.get("label_width_mm"))
+                h_mm = float(attrs.get("label_height_mm"))
+            except (TypeError, ValueError):
+                return None
+            if w_mm <= 0 or h_mm <= 0:
+                return None
+            long_mm, short_mm = max(w_mm, h_mm), min(w_mm, h_mm)
+            return (
+                min(1600, max(10, round(long_mm * DOTS_PER_MM))),
+                min(1600, max(10, round(short_mm * DOTS_PER_MM))),
+            )
+        return None
 
     def _resolve_font(self, name: str) -> str | None:
         for candidate in (
@@ -335,27 +366,33 @@ class NiimBridge:
     ) -> None:
         s = self.settings
         image_uri = "data:image/png;base64," + base64.b64encode(png).decode()
+        data: dict[str, Any] = {
+            "payload": [
+                {
+                    "type": "dlimg",
+                    "url": image_uri,
+                    "x": 0,
+                    "y": 0,
+                    "xsize": spec.width,
+                    "ysize": spec.height,
+                }
+            ],
+            "width": spec.width,
+            "height": spec.height,
+            "rotate": int(s.get(CONF_ROTATE, DEFAULT_ROTATE)),
+            "copies": int(copies or s.get(CONF_COPIES, DEFAULT_COPIES)),
+        }
+        # Density and label type are only sent when set. On a D110-M, sending
+        # density 3 / label type 1 made hass-niimbot fail with "No response for
+        # request 0xe3", while leaving them out printed fine.
+        if (density := int(s.get(CONF_DENSITY, DEFAULT_DENSITY))) > 0:
+            data["density"] = density
+        if (label_type := int(s.get(CONF_LABEL_TYPE, DEFAULT_LABEL_TYPE))) > 0:
+            data["label_type"] = label_type
         await self.hass.services.async_call(
             "niimbot",
             "print",
-            {
-                "payload": [
-                    {
-                        "type": "dlimg",
-                        "url": image_uri,
-                        "x": 0,
-                        "y": 0,
-                        "xsize": spec.width,
-                        "ysize": spec.height,
-                    }
-                ],
-                "width": spec.width,
-                "height": spec.height,
-                "rotate": int(s.get(CONF_ROTATE, DEFAULT_ROTATE)),
-                "density": int(s.get(CONF_DENSITY, DEFAULT_DENSITY)),
-                "label_type": int(s.get(CONF_LABEL_TYPE, DEFAULT_LABEL_TYPE)),
-                "copies": int(copies or s.get(CONF_COPIES, DEFAULT_COPIES)),
-            },
+            data,
             target={"device_id": s[CONF_DEVICE_ID]},
             blocking=True,
         )

@@ -20,6 +20,7 @@ CONF_MQTT_PNG_TOPIC = "mqtt_png_topic"
 CONF_MQTT_JSON_TOPIC = "mqtt_json_topic"
 
 CUSTOM_SIZE = "custom"
+AUTO_SIZE = "auto"
 
 # Landscape design size in pixels at 203 DPI (8 dots/mm). Rotation is applied
 # separately so tape-fed printers (D110) can use the natural landscape design.
@@ -34,8 +35,8 @@ LABEL_SIZE_PRESETS: dict[str, tuple[int, int]] = {
 
 DEFAULT_LABEL_SIZE = "40x12"
 DEFAULT_ROTATE = 90
-DEFAULT_DENSITY = 3
-DEFAULT_LABEL_TYPE = 1
+DEFAULT_DENSITY = 0  # 0 = let the printer / loaded roll decide
+DEFAULT_LABEL_TYPE = 0  # 0 = let the printer / loaded roll decide
 DEFAULT_COPIES = 1
 DEFAULT_FONT_SIZE = 0  # 0 = auto-fit
 DEFAULT_QR_PERCENT = 90  # QR height as a percentage of label height

@@ -91,17 +91,33 @@ All text uses bold DejaVu Sans Mono by default, chosen because it stays legible 
 
 | Setting | Notes |
 |---|---|
-| Label size | Presets are landscape pixels at 203 DPI (30×15, 40×12, 40×30, 50×15, 50×30, 50×80 mm), or custom pixels. Image mode takes the size from HomeBox instead |
+| Label size | Presets are landscape pixels at 203 DPI (30×15, 40×12, 40×30, 50×15, 50×30, 50×80 mm), custom pixels, or **Auto**, which uses the size of the roll loaded in the printer (see [Label details from the printer](#label-details-from-the-printer)). Image mode takes the size from HomeBox instead |
 | Rotation | Applied by niimbot when printing. D110-style tape printers typically need 90 |
-| Density, label type, copies | Passed through to `niimbot.print`; copies from HomeBox override the configured value |
+| Density, label type | **0 / Printer default** (the default): not sent, so the printer and the loaded roll decide. Set a value only if you need to override it |
+| Copies | Passed through to `niimbot.print`; copies from HomeBox override the configured value |
 | QR code size | Percent of label height for the standard layout (30–100, default 90) |
 | Font, font size | Optional font file (looked up in `/config/www/fonts`) replaces the default; size 0 auto-fits |
+
+## Label details from the printer
+
+hass-niimbot can read the loaded roll's details from the printer's RFID tag. Turn on **Fetch Label Info Online** in the Niimbot integration's options (off by default; it sends only the roll's product code to a NIIMBOT server). Then:
+
+- hass-niimbot itself fills in the print size and label type when a print leaves them out.
+- NiimBridge's **Auto** label size reads the roll's size from the printer's Cloud Label Info sensor, so the label is drawn for whatever roll is loaded.
+
+This needs a roll with an RFID tag. With other rolls the sensor has no size, and NiimBridge falls back to the custom width and height in its options.
+
+## Multiple printers
+
+Each NiimBridge entry drives one printer, with its own settings and its own webhook URL and preview image. Add the integration once per printer (Settings → Devices & services → NiimBridge → **Add service**). `niimbridge.print_label` needs `config_entry_id` when there is more than one entry. HomeBox supports only one print command, so a HomeBox print button reaches one printer; use the service from an automation for the others.
 
 ## Troubleshooting
 
 - **Nothing happens when printing in HomeBox.** Check that a default template exists (quick print is disabled without one) and that `labelPrinting` is true at `/api/v1/status`. Then test the webhook without HomeBox: `curl -i -X POST -H "Content-Type: text/plain" -H "X-Title: Test" http://<ha>/api/webhook/<random-id>` should answer `202`.
 - **Label has no asset ID or location.** In text mode that needs the HomeBox integration for Home Assistant to look the item up, because HomeBox's print command only receives the item name and URL.
 - **Text or lines look speckled.** Use text mode, or image mode with a template that matches your label's millimetre size at 203 DPI.
+- **`Failed to print: No response for request 0xe3` or `GATT Error … Internal error`.** Leave density and label type at **0 / Printer default** in NiimBridge's options. On a D110-M, sending density 3 and label type 1 made hass-niimbot fail (also when called directly, without NiimBridge), and leaving them out printed fine.
+- **`No connectable radio sees …`.** The printer is asleep or out of range of your Bluetooth adapter or ESPHome proxy; wake it and try again.
 - **Printing is slow.** Most of the time is the Bluetooth connection in hass-niimbot; see its connection options. Turn on debug logging (`custom_components.niimbridge: debug`) to see when each request arrives.
 - **Several copies when you expected one.** Make sure `--header=X-Copies:{{.Copies}}` is in the command and the copies setting is 1.
 

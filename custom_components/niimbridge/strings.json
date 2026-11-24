@@ -3,14 +3,14 @@
     "step": {
       "user": {
         "title": "NiimBridge",
-        "description": "Choose the Niimbot printer and label settings. Sizes are landscape; use rotation to match how your printer feeds labels (D110 usually needs 90).",
+        "description": "Choose the Niimbot printer and label settings. Sizes are landscape; use rotation to match how your printer feeds labels (D110 usually needs 90). Auto size and the printer defaults use the loaded roll's information, which needs 'Fetch Label Info Online' in the Niimbot integration.",
         "data": {
           "device_id": "Niimbot printer",
           "label_size": "Label size",
           "width": "Custom width (px)",
           "height": "Custom height (px)",
           "rotate": "Rotation",
-          "density": "Print density",
+          "density": "Print density (0 = printer default)",
           "label_type": "Label type",
           "copies": "Copies",
           "font": "Font file (optional)",
@@ -35,7 +35,7 @@
           "width": "Custom width (px)",
           "height": "Custom height (px)",
           "rotate": "Rotation",
-          "density": "Print density",
+          "density": "Print density (0 = printer default)",
           "label_type": "Label type",
           "copies": "Copies",
           "font": "Font file (optional)",
