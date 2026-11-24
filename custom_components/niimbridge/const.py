@@ -45,3 +45,4 @@ MAX_UPLOAD_BYTES = 2_000_000
 SIGNAL_LABEL_UPDATED = f"{DOMAIN}_label_updated"
 
 DOTS_PER_MM = 8  # Niimbot printers print at 203 DPI
+ROUTE_TOLERANCE_MM = 1.0  # label sizes within this many mm count as the same stock
