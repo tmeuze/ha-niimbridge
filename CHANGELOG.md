@@ -1,16 +1,27 @@
 # Changelog
 
+All notable changes to NiimBridge, newest first. Versions follow [Semantic Versioning](https://semver.org). Wrong turns and fixes stay in the record.
+
+## [Unreleased]
+
+### Changed
+
+- README reorganised: status and warranty at the top, a diagram of how a print travels, getting started, then the reference sections. Wording simplified throughout.
+
+
 ## [0.4.0] - 2026-11-24
 
 ### Added
 
-- **Routing by label size.** With several NiimBridge entries (one per printer), a request from HomeBox goes to the entry whose label size matches the template's size (`X-Width-Mm` / `X-Height-Mm`, within 1 mm, orientation ignored). HomeBox's single print command can therefore serve several printers, one template per label stock. The command shown in Configure now includes those two headers; update the HomeBox command to use it.
+- **Routing by label size.** With several NiimBridge entries (one per printer), a request from HomeBox now goes to the entry whose label size matches the template's size (`X-Width-Mm` and `X-Height-Mm`, within 1 mm, orientation ignored). HomeBox only allows one print command, so this lets it serve several printers, with one template per label stock.
+
+**To upgrade:** the command shown in Configure now includes those two headers. Copy it into `HBOX_LABEL_MAKER_PRINT_COMMAND` on the HomeBox server again, otherwise routing has nothing to match on and the receiving entry prints everything.
 
 ## [0.3.2] - 2026-11-23
 
 ### Changed
 
-- Density and label type are now optional and default to "printer default": they are only sent to `niimbot.print` when set. On a D110-M, sending density 3 and label type 1 made hass-niimbot fail ("No response for request 0xe3"); the same label without them printed. **Existing entries keep their saved values: open Configure and set density to 0 and label type to Printer default.**
+- Density and label type are now optional and default to "printer default": they are only sent to `niimbot.print` when set. On a D110-M, sending density 3 and label type 1 made hass-niimbot fail ("No response for request 0xe3"); the same label without them printed. **To upgrade:** existing entries keep their saved values, so open Configure and set density to 0 and label type to Printer default.
 - New **Auto** label size reads the loaded roll's size from hass-niimbot's Cloud Label Info sensor (needs "Fetch Label Info Online" in the Niimbot integration and an RFID roll), falling back to the custom size.
 - README: label details from the printer, multiple printers, and troubleshooting for the errors above.
 
