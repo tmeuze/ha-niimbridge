@@ -1,28 +1,52 @@
 # NiimBridge
 
-A Home Assistant (HACS) integration that bridges [HomeBox](https://homebox.software/) label printing to a Niimbot printer through the [hass-niimbot](https://github.com/eigger/hass-niimbot) integration.
+**Print HomeBox labels on a Niimbot printer, through Home Assistant.**
 
-HomeBox runs a print command when you print a label; that command posts to a webhook NiimBridge creates in Home Assistant; NiimBridge draws or resizes the label for your label stock and calls `niimbot.print`. Bluetooth is handled entirely by hass-niimbot.
+[![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://hacs.xyz)
+[![Validate](https://github.com/tmeuze/ha-niimbridge/actions/workflows/validate.yml/badge.svg)](https://github.com/tmeuze/ha-niimbridge/actions/workflows/validate.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-## Requirements
+> **Status: in testing.** Used with a D110-M and HomeBox v0.27, but routing between two printers has not been run on real hardware yet.
+> This project comes with no warranty or guarantee of fitness for any purpose. Use it at your own risk.
+>
+> **LLM use.** Built and maintained with substantial AI assistance (Claude Code). Design decisions and reviews are by a human; generated code is reviewed before it is merged.
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/tmeuze/ha-niimbridge/main/docs/images/flow.svg" alt="HomeBox posts to a NiimBridge webhook in Home Assistant, which draws the label, picks the printer by label size and calls niimbot.print in hass-niimbot" width="860">
+</p>
+
+## What it does
+
+HomeBox can run a command when you print a label. NiimBridge gives that command a webhook in Home Assistant to post to. When a request arrives, NiimBridge draws the label for your label stock (or resizes the picture HomeBox made), then hands it to the [hass-niimbot](https://github.com/eigger/hass-niimbot) `niimbot.print` service. Bluetooth is entirely hass-niimbot's job.
+
+## Use cases
+
+- You keep your inventory in HomeBox and want a sticker on the shelf bin without exporting anything: click **Print label** and it comes out of the printer on the desk.
+- You own more than one Niimbot (say a D110-M for small tape labels and a B1 for bigger ones) and want HomeBox to pick the right one from the template you chose.
+
+## Getting started
+
+**You need:**
 
 - Home Assistant 2024.6 or newer
 - [hass-niimbot](https://github.com/eigger/hass-niimbot) installed with your printer added
 - HomeBox v0.27 or newer (label templates and server-side printing; see [HomeBox's Label Templates guide](https://homebox.software/en/user-guide/label-templates))
 - Optional but recommended: the HomeBox integration for Home Assistant, so NiimBridge can look up an item's asset ID and location (see [Print modes](#print-modes))
 
-## Install
+**Then:**
 
-1. HACS → three-dot menu → Custom repositories → add `https://github.com/tmeuze/ha-niimbridge` as **Integration**.
+1. In HACS, open the three-dot menu, choose Custom repositories, and add `https://github.com/tmeuze/ha-niimbridge` as an **Integration**.
 2. Download NiimBridge and restart Home Assistant.
-3. Settings → Devices & services → Add integration → **NiimBridge**.
-4. Pick your Niimbot printer and label settings. The last step shows your webhook URL and the exact HomeBox command to use. To see it again later: Settings → Devices & services → NiimBridge → **Configure**.
+3. Go to Settings, Devices & services, Add integration, **NiimBridge**. Pick your Niimbot printer and label settings. The last step shows your webhook URL and the exact HomeBox command to use. To see it again later, open the entry and choose **Configure**.
+4. Import a starter template in HomeBox, set the print command, and print. The steps are in [HomeBox setup](#homebox-setup).
 
-## HomeBox setup
+## Usage
+
+### HomeBox setup
 
 HomeBox does not talk to printers itself. Server-side printing is set with an environment variable (it is not a UI setting), and since v0.27 every print needs a label template.
 
-### 1. Create a label template and make it your default
+#### 1. Create a label template and make it your default
 
 HomeBox's quick print and print dialog render a **label template**, so you need at least one, even if you use the text print mode below.
 
@@ -32,7 +56,7 @@ HomeBox's quick print and print dialog render a **label template**, so you need 
 
 The starter template has a QR code (asset URL), the asset ID white on black, the location, a rule and the item name with auto-fit. If you design your own, HomeBox's tips apply: keep text inside a small margin, use **Auto-fit** for item names, and give QR codes room to scan (HomeBox suggests at least 15 mm on a 300 DPI printer; a 12 mm tall label limits the QR code to about 11 mm, so check that your phone scans it).
 
-### 2. Set the print command
+#### 2. Set the print command
 
 Set `HBOX_LABEL_MAKER_PRINT_COMMAND` on the HomeBox server and restart it. The Configure dialog shows the command with your webhook URL filled in. For Docker Compose:
 
@@ -49,13 +73,13 @@ Notes from HomeBox's documentation that apply here:
 - The regular HomeBox image includes `wget` (the hardened image has no tools, so use the regular one). The HomeBox container must be able to reach Home Assistant at the webhook URL; if the URL NiimBridge shows isn't reachable from HomeBox, use an address that is, such as the HA server's LAN IP.
 - Webhook URLs need no login, so the random ID is the secret. Don't share it. To get a new one, remove and re-add the integration.
 
-### 3. Print
+#### 3. Print
 
 Use **Print label** on an item (one click uses your default template; the arrow offers template and copies), **Quick Print Selected** on a list, or **Batch print**. Choose the **Label printer** destination when asked. The template editor's **Test print** button sends one label through the same command, which is a handy way to test the whole chain.
 
 HomeBox's `/api/v1/status` reports whether a print command is set (`labelPrinting`). If the **Label printer** option is missing in HomeBox, no print command is configured.
 
-## Print modes
+### Print modes
 
 NiimBridge accepts three kinds of request on the same webhook.
 
@@ -77,7 +101,7 @@ NiimBridge sizes the label from `X-Width-Mm` and `X-Height-Mm` (8 dots per mm, s
 
 `niimbridge.print_label` prints the same layout from an automation (`preview_only` renders without printing). The regular HomeBox image also ships `mosquitto_pub`: set a PNG topic and/or a JSON topic in the options, and for image mode over MQTT use `mosquitto_pub -h <broker> -u <user> -P <password> -t homebox/labels -f {{.FileName}}` as the print command.
 
-## The standard label
+### The standard label
 
 Drawn in text, JSON, service and MQTT-JSON modes: a QR code on the left (item URL, else asset ID, else name) and three rows on the right:
 
@@ -87,7 +111,19 @@ Drawn in text, JSON, service and MQTT-JSON modes: a QR code on the left (item UR
 
 All text uses bold DejaVu Sans Mono by default, chosen because it stays legible at 1-bit on small labels (the strokes survive thresholding and `1`, `l` and `I` are clearly different); the asset ID uses the regular weight because heavy strokes fill in on white-on-black. You can set your own font file in the options. The asset ID and location are single lines that shrink to fit; the name is cut off with an ellipsis only at the minimum size. The **Label preview** image entity shows the last rendered label.
 
-## Label settings
+### Troubleshooting
+
+- **Nothing happens when printing in HomeBox.** Check that a default template exists (quick print is disabled without one) and that `labelPrinting` is true at `/api/v1/status`. Then test the webhook without HomeBox: `curl -i -X POST -H "Content-Type: text/plain" -H "X-Title: Test" http://<ha>/api/webhook/<random-id>` should answer `202`.
+- **Label has no asset ID or location.** In text mode that needs the HomeBox integration for Home Assistant to look the item up, because HomeBox's print command only receives the item name and URL.
+- **Text or lines look speckled.** Use text mode, or image mode with a template that matches your label's millimetre size at 203 DPI.
+- **`Failed to print: No response for request 0xe3` or `GATT Error … Internal error`.** Leave density and label type at **0 / Printer default** in NiimBridge's options. On a D110-M, sending density 3 and label type 1 made hass-niimbot fail (also when called directly, without NiimBridge), and leaving them out printed fine.
+- **`No connectable radio sees …`.** The printer is asleep or out of range of your Bluetooth adapter or ESPHome proxy; wake it and try again.
+- **Printing is slow.** Most of the time is the Bluetooth connection in hass-niimbot; see its connection options. Turn on debug logging (`custom_components.niimbridge: debug`) to see when each request arrives.
+- **Several copies when you expected one.** Make sure `--header=X-Copies:{{.Copies}}` is in the command and the copies setting is 1.
+
+## Configuration
+
+### Label settings
 
 | Setting | Notes |
 |---|---|
@@ -98,7 +134,7 @@ All text uses bold DejaVu Sans Mono by default, chosen because it stays legible 
 | QR code size | Percent of label height for the standard layout (30–100, default 90) |
 | Font, font size | Optional font file (looked up in `/config/www/fonts`) replaces the default; size 0 auto-fits |
 
-## Label details from the printer
+### Label details from the printer
 
 hass-niimbot can read the loaded roll's details from the printer's RFID tag. Turn on **Fetch Label Info Online** in the Niimbot integration's options (off by default; it sends only the roll's product code to a NIIMBOT server). Then:
 
@@ -107,7 +143,7 @@ hass-niimbot can read the loaded roll's details from the printer's RFID tag. Tur
 
 This needs a roll with an RFID tag. With other rolls the sensor has no size, and NiimBridge falls back to the custom width and height in its options.
 
-## Multiple printers
+### Multiple printers
 
 Each NiimBridge entry drives one printer, with its own settings, webhook URL and preview image. Add the integration once per printer (Settings → Devices & services → NiimBridge → **Add service**) and give each its own label size.
 
@@ -119,16 +155,31 @@ HomeBox supports only one print command, so it can only call one webhook. NiimBr
 
 With **Auto** label size, an entry matches the size of the roll currently loaded in its printer. If two entries have the same label size, the receiving entry wins, then the first match. Routing applies to HomeBox's webhook requests; `niimbridge.print_label` needs `config_entry_id` when there is more than one entry, and MQTT topics belong to the entry that subscribes to them.
 
-## Troubleshooting
+## How it works
 
-- **Nothing happens when printing in HomeBox.** Check that a default template exists (quick print is disabled without one) and that `labelPrinting` is true at `/api/v1/status`. Then test the webhook without HomeBox: `curl -i -X POST -H "Content-Type: text/plain" -H "X-Title: Test" http://<ha>/api/webhook/<random-id>` should answer `202`.
-- **Label has no asset ID or location.** In text mode that needs the HomeBox integration for Home Assistant to look the item up, because HomeBox's print command only receives the item name and URL.
-- **Text or lines look speckled.** Use text mode, or image mode with a template that matches your label's millimetre size at 203 DPI.
-- **`Failed to print: No response for request 0xe3` or `GATT Error … Internal error`.** Leave density and label type at **0 / Printer default** in NiimBridge's options. On a D110-M, sending density 3 and label type 1 made hass-niimbot fail (also when called directly, without NiimBridge), and leaving them out printed fine.
-- **`No connectable radio sees …`.** The printer is asleep or out of range of your Bluetooth adapter or ESPHome proxy; wake it and try again.
-- **Printing is slow.** Most of the time is the Bluetooth connection in hass-niimbot; see its connection options. Turn on debug logging (`custom_components.niimbridge: debug`) to see when each request arrives.
-- **Several copies when you expected one.** Make sure `--header=X-Copies:{{.Copies}}` is in the command and the copies setting is 1.
+Each NiimBridge entry registers one Home Assistant webhook. HomeBox's print command posts the item name and URL (or the template's picture) to it, and the entry replies `202` at once so HomeBox never waits on Bluetooth. In the background it looks the item up through the HomeBox integration, draws the label with Pillow and segno, thresholds it to 1 bit, and calls `niimbot.print`. With several entries, the one that receives a request first checks the label size in the headers and hands it to the entry whose size matches. The long version is in [docs/architecture.md](docs/architecture.md).
 
-## License
+## Documentation
 
-MIT. The bundled font DejaVu Sans Mono has its own license in `custom_components/niimbridge/fonts/LICENSE_DEJAVU.txt`.
+| Read | For |
+|---|---|
+| [Where this got to](docs/STATE.md) | Current state and what is not yet verified. |
+| [Architecture](docs/architecture.md) | How a print travels and where each piece lives. |
+| [Decisions](docs/decisions.md) | Every significant choice, with reasoning and cost. |
+| [Security](docs/security.md) | The webhook as a secret, and what the integration touches. |
+| [Credits](docs/credits.md) | Dependencies and licences. |
+| [Changelog](CHANGELOG.md) | What changed in each release. |
+
+## Development
+
+```bash
+pyenv virtualenv 3.14.9 ha-niimbridge && pyenv local ha-niimbridge
+pip install pillow segno pytest pytest-asyncio homeassistant
+python -m pytest -q tests -o asyncio_mode=auto
+```
+
+Tests that need Home Assistant skip themselves when it isn't installed. Edit `custom_components/niimbridge/manifest.json` only through `json.load` and `json.dump`; `tests/test_manifest.py` guards it. Start reading at `bridge.py` (request handling and routing) and `renderer.py` (the label drawing). See [AGENTS.md](AGENTS.md) for working rules.
+
+## Licence
+
+MIT, see [LICENSE](LICENSE). The bundled font DejaVu Sans Mono has its own licence in `custom_components/niimbridge/fonts/LICENSE_DEJAVU.txt`.
